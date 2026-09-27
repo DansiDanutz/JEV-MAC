@@ -1,0 +1,25 @@
+# Goal: a verified local JEV-MAC
+
+Status: AWAITING PILOT INPUT — synthetic-tested preview delivered; full goal NOT complete.
+
+Storage interruption recovered; dependency installation, native compilation and tests
+were rerun successfully. See docs/VERIFICATION.md for exact evidence and limitations.
+
+- [x] Persistent local scanner, stop/restart, catalog, exact duplicates, Doctor.
+- [x] Jev metadata preview, consent, typed judgments, request limits and safe errors; live synthetic smoke test.
+- [x] Immutable plans, explicit approval, recoverable quarantine/copy organization, restore on fixtures.
+- [x] Local authenticated dashboard with accessible error/loading/empty states.
+- [x] Shared CLI/MCP and portable agent skill; actual MCP protocol smoke test.
+- [x] Automated tests, actual browser workflow and macOS fixture restore drill.
+- [x] Independent architectural conditional approval, cleanup pass and fresh regression run.
+- [ ] Documentation and commits pushed to GitHub (update after push verification).
+- [ ] User-selected real-data pilot and actual harness compatibility checks (require user context where unavailable).
+
+No personal folder is selected implicitly. Never mark unperformed live tests passed.
+
+Next user input: a full path to one noncritical folder for read-only pilot, and the host
+client to use for GLM. The reply “ok” did not identify either. Harness registration is
+documented but existing configurations have not been modified. Real cloud-placeholder
+behavior, large-library performance and complete backup validation remain unproven.
+Visual/video similarity is not implemented; exact hashes and bounded lexical references
+must not be represented as perceptual matching or full dependency analysis.

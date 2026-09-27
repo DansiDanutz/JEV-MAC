@@ -12,3 +12,7 @@ data/
 catalogs/
 logs/
 *.sqlite*
+.omx/
+playwright-report/
+test-results/
+native/fsops
