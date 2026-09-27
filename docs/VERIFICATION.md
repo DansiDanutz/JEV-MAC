@@ -20,6 +20,11 @@ Platform: this Apple Silicon Mac, Node 26.10.0; no runtime replacement.
   model-driven session invoked `jev_mac_status` exactly once against an isolated catalog.
   It correctly reported no approved roots, files or active jobs. No normal Codex config
   or personal folder was changed for this compatibility check.
+- Claude Code 2.1.283 accepted a strict, temporary MCP configuration and its real
+  model-driven session invoked only `jev_mac_status`, correctly reporting the same empty
+  isolated catalog. Kimi Code 2.1.1 accepted a temporary project MCP configuration after
+  its explicit workspace-trust gate; its model-driven status call returned no roots,
+  files or jobs. The temporary MCP file and catalog were removed afterward.
 - A single live TypeSafe request used only invented metadata: Screenshot demo.png,
   2048 bytes. Jev returned jev-1.13.0, category screenshot, confidence 0.92;
   635 input and 95 output tokens. No personal filenames/content were transmitted.
@@ -52,9 +57,8 @@ and further jobs are fenced until storage is resolved and the service restarted.
   absence of a reference is explicitly not orphan/deletion proof.
 - Folder overlap is hash evidence for inspected files, not proof of backup restoration,
   version supersession, or redundancy of excluded files.
-- Codex registration and a model-driven status call are verified. Claude Code and Kimi
-  registration/model-driven workflows remain untested. No standalone glm executable was
-  found; GLM needs a chosen host client.
+- Codex, Claude Code and Kimi registration/model-driven status workflows are verified.
+  No standalone glm executable was found; GLM needs a chosen host client.
 - No permanent deletion, automatic Trash emptying, system repair or background cleanup.
   Quarantine does not free space. Partial copy failures retain a .jev-part file for
   manual recovery; no unverified cleanup silently deletes it.

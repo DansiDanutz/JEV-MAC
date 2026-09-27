@@ -24,9 +24,47 @@ as an absolute argument. Use your client's documented MCP registration UI/comman
 this project does not modify Claude, Codex or Kimi configuration automatically.
 Codex uses its own configuration shape, so do not paste the JSON into TOML directly.
 
+## Tested client registrations
+
+Set `JEV_MAC` to this checkout's absolute path in the examples below. Start the service
+first and verify `npm run cli -- status` succeeds.
+
+Codex CLI 0.157.0:
+
+```sh
+codex mcp add jev-mac -- "$JEV_MAC/node_modules/.bin/tsx" "$JEV_MAC/src/mcp.ts"
+codex mcp get jev-mac
+```
+
+Claude Code 2.1.283 (local project scope):
+
+```sh
+claude mcp add --scope local jev-mac -- "$JEV_MAC/node_modules/.bin/tsx" "$JEV_MAC/src/mcp.ts"
+claude mcp get jev-mac
+```
+
+Kimi Code 2.1.1 uses `.kimi-code/mcp.json` in the checkout. Review the command shown
+by its workspace-trust prompt before enabling it:
+
+```json
+{
+  "mcpServers": {
+    "jev-mac": {
+      "command": "/absolute/path/to/JEV-MAC/node_modules/.bin/tsx",
+      "args": ["/absolute/path/to/JEV-MAC/src/mcp.ts"]
+    }
+  }
+}
+```
+
+These registrations expose only the tools defined by `src/mcp.ts`. Remove a test
+registration with `codex mcp remove jev-mac` or `claude mcp remove jev-mac`; remove
+the Kimi JSON entry through `/mcp-config` or by editing that project file.
+
 The portable skill is `skills/jev-mac/SKILL.md`; copy that folder into a selected
 harness's skill directory only when requested. A GLM-backed client needs MCP support.
-Transport tests establish protocol compatibility, not successful registration in every app.
+Codex, Claude Code and Kimi model-driven status calls have been verified; a GLM-backed
+host has not been selected or tested.
 
 The agent credential permits state, scan of approved roots, cancellation and plan/payload
 previews. It deliberately cannot approve roots, transmit metadata, apply or restore.
