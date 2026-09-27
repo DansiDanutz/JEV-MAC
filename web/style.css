@@ -232,6 +232,16 @@ code {
   max-width: 1440px;
   margin: 0 auto;
 }
+.content > .card {
+  margin-bottom: 24px;
+}
+.content > .card .plan-row {
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.content > .card li {
+  overflow-wrap: anywhere;
+}
 .hero {
   border-radius: 20px;
   background: #18201d;

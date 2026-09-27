@@ -228,6 +228,11 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.querySelector(".workspace")?.scrollTo(0, 0);
+  }, [page]);
+
   const request = useCallback(
     async <T,>(
       path: string,
@@ -426,6 +431,27 @@ function App() {
           </div>
         </header>
         <main className="content">
+          {state.plans.some((p) => ["pending", "ready"].includes(p.status)) && (
+            <Card title="Your next step: review these files">
+              <p>Nothing moves until you confirm. Open a preview below to see exactly what will happen.</p>
+              {state.plans.filter((p) => ["pending", "ready"].includes(p.status)).map((plan) => (
+                <div className="plan-row" key={plan.id}>
+                  <span>
+                    <strong>{plan.kind === "quarantine" ? "Move to recoverable quarantine" : "Create organized copies"}</strong>
+                    <small>{plan.items.map((item) => item.source).join(", ")}</small>
+                  </span>
+                  <button className="primary" disabled={!!busy || !!activeJob} onClick={() => setPlanDialog(plan)}>Review {plan.items.length} {plan.items.length === 1 ? "file" : "files"}</button>
+                </div>
+              ))}
+            </Card>
+          )}
+          {state.operations.some((op) => op.kind === "quarantine" && op.status === "complete") && (
+            <Card title="Files moved safely — nothing permanently deleted">
+              <p>{state.operations.filter((op) => op.kind === "quarantine" && op.status === "complete").length} file(s) are in recoverable quarantine. This does not free disk space.</p>
+              <ul>{state.operations.filter((op) => op.kind === "quarantine" && op.status === "complete").slice(0, 3).map((op) => <li key={op.id}>{op.source}</li>)}</ul>
+              <button onClick={() => setPage("History")}>View moved files / restore</button>
+            </Card>
+          )}
           {error && (
             <div className="alert error" role="alert">
               <span>{error}</span>
@@ -488,11 +514,10 @@ function App() {
             aria-modal="true"
             aria-labelledby="approve-title"
           >
-            <p className="eyebrow">Immutable plan</p>
-            <h2 id="approve-title">Approve exact {planDialog.kind} plan?</h2>
+            <p className="eyebrow">Check these files</p>
+            <h2 id="approve-title">{planDialog.kind === "quarantine" ? "Move these files to quarantine?" : "Create these organized copies?"}</h2>
             <p>
-              This approves plan <code>{planDialog.id}</code> only. Sources are
-              revalidated before any operation.
+              Only the files listed below will be affected. We check them again before making changes.
             </p>
             {planDialog.kind === "quarantine" && (
               <div className="alert warning">
@@ -526,13 +551,13 @@ function App() {
                     "apply",
                     "/api/apply",
                     { planId: planDialog.id, confirmation: planDialog.id },
-                    () => setPlanDialog(null),
+                    () => { setPlanDialog(null); setPage("History"); },
                   )
                 }
               >
                 {busy === "apply"
-                  ? "Applying…"
-                  : `Approve plan ${planDialog.id}`}
+                  ? "Starting…"
+                  : planDialog.kind === "quarantine" ? "Move to quarantine" : "Create copies"}
               </button>
             </div>
           </section>

@@ -96,7 +96,7 @@ test("previews, cancels, and explicitly approves an organize plan", async ({
   await page.getByRole("button", { name: "Plan copy organization" }).click();
 
   const dialog = page.getByRole("dialog", {
-    name: "Approve exact organize plan?",
+    name: "Create these organized copies?",
   });
   await expect(dialog).toContainText("_JEV_Organized");
   await dialog.getByRole("button", { name: "Cancel" }).click();
@@ -105,9 +105,9 @@ test("previews, cancels, and explicitly approves an organize plan", async ({
   await page.getByRole("button", { name: "Review / Plans" }).click();
   await page.getByRole("button", { name: "Review", exact: true }).click();
   const approval = page.getByRole("dialog", {
-    name: "Approve exact organize plan?",
+    name: "Create these organized copies?",
   });
-  await approval.getByRole("button", { name: /^Approve plan / }).click();
+  await approval.getByRole("button", { name: "Create copies", exact: true }).click();
   await waitForLatestJob(app, "apply", "complete");
   await expect
     .poll(async () =>
@@ -137,10 +137,10 @@ test("quarantines a selected file and restores it from History", async ({
   await page.getByRole("button", { name: "Plan quarantine for 1" }).click();
 
   const dialog = page.getByRole("dialog", {
-    name: "Approve exact quarantine plan?",
+    name: "Move these files to quarantine?",
   });
   await expect(dialog).toContainText("does not reclaim disk space");
-  await dialog.getByRole("button", { name: /^Approve plan / }).click();
+  await dialog.getByRole("button", { name: "Move to quarantine", exact: true }).click();
   await waitForLatestJob(app, "apply", "complete");
   await expect
     .poll(() =>

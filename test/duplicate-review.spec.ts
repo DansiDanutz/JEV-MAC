@@ -46,15 +46,15 @@ test("duplicate cards keep one copy, ignore/restore groups, preview and restore 
       .getByRole("button", { name: "Preview quarantine (1)", exact: true })
       .click();
     const dialog = page.getByRole("dialog", {
-      name: "Approve exact quarantine plan?",
+      name: "Move these files to quarantine?",
     });
     await expect(dialog).toContainText("This copy stays in place");
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     expect(app.engine.list("operation")).toHaveLength(0);
-    await group
-      .getByRole("button", { name: "Preview quarantine (1)", exact: true })
-      .click();
-    await dialog.getByRole("button", { name: /Approve plan / }).click();
+    await page.getByRole("button", { name: "Overview", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Your next step: review these files" })).toBeInViewport();
+    await page.getByRole("button", { name: "Review 1 file", exact: true }).click();
+    await dialog.getByRole("button", { name: "Move to quarantine", exact: true }).click();
     await expect
       .poll(
         () =>
@@ -62,6 +62,7 @@ test("duplicate cards keep one copy, ignore/restore groups, preview and restore 
       )
       .toBe("complete");
     const op = app.engine.list<Operation>("operation")[0];
+    await expect(page.getByRole("heading", { name: "Files moved safely — nothing permanently deleted" })).toBeVisible();
     await expect
       .poll(() =>
         fs.stat(path.join(root.path, op.source)).then(
