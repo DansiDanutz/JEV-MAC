@@ -6,9 +6,11 @@ Platform: this Apple Silicon Mac, Node 26.10.0; no runtime replacement.
 
 - Native helper compiled with Apple's clang.
 - TypeScript strict typecheck and Vite production build passed.
-- 41 node tests passed after cleanup, including Doctor, HTTP/MCP, approval and recovery regressions.
-- Six actual Chrome browser tests passed: empty/demo, scan/catalog, copy-plan approval,
+- 42 node tests passed, including folder picker boundaries, Doctor, HTTP/MCP, approval and recovery regressions.
+- Seven actual Chrome browser tests passed: point-and-click onboarding, empty/demo, scan/catalog, copy-plan approval,
   quarantine/restore, held stopping-state and stop/rescan/daemon restart/reconnect.
+- Folder picker browser tests inject a synthetic chooser result; they do not automate the
+  real macOS chooser. Cancellation and choosing alone never register a root or start a scan.
 - Synthetic macOS files retained content, mode, mtime and extended attributes after
   quarantine/restore; copy preservation tested too.
 - Real MCP stdio client negotiated the protocol, listed constrained tools and read the

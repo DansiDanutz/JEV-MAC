@@ -8,7 +8,7 @@ import React, {
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
-type Root = { id: string; path: string };
+type Root = { id: string; path: string; scanStatus?: string };
 type Job = {
   id: string;
   type: string;
@@ -134,6 +134,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState("");
   const [rootPath, setRootPath] = useState("");
+  const [folderDialog, setFolderDialog] = useState(false);
+  const [notice, setNotice] = useState("");
   const [planDialog, setPlanDialog] = useState<Plan | null>(null);
   const [classifyDialog, setClassifyDialog] = useState<{
     previewId: string;
@@ -142,6 +144,71 @@ function App() {
   const [consent, setConsent] = useState(false);
   const inFlight = useRef(false);
   const limit = 100;
+  function chooseFolder(location: string) {
+    setNotice(
+      "The Mac folder picker is opening. Choose a folder, or press Cancel.",
+    );
+    void action(
+      "picker",
+      "/api/folder-picker",
+      { location },
+      (result: { path: string | null; cancelled: boolean }) => {
+        setNotice(
+          result.cancelled
+            ? "Folder selection cancelled. Nothing was connected or scanned."
+            : "",
+        );
+        if (result.path) {
+          setRootPath(result.path);
+          setFolderDialog(true);
+        }
+      },
+    );
+  }
+  function folderChoices() {
+    return (
+      <Card title="1. Choose what to organize">
+        <p className="muted">
+          Pick a folder on this Mac. You’ll confirm it before connecting.
+          Nothing is uploaded or changed.
+        </p>
+        <div className="folder-choices">
+          {(
+            [
+              ["downloads", "Downloads", "Review downloaded files"],
+              ["desktop", "Desktop", "Review screenshots and loose files"],
+              ["documents", "Documents", "Choose a project or document folder"],
+              [
+                "other",
+                "Choose another folder",
+                "Browse this Mac or an external drive",
+              ],
+            ] as const
+          ).map(([id, label, description]) => (
+            <button
+              key={id}
+              disabled={!!busy || !!activeJob}
+              onClick={() => chooseFolder(id)}
+            >
+              <strong>{label}</strong>
+              <small>{description}</small>
+            </button>
+          ))}
+        </div>
+        <p className="muted">
+          2. Connect folder → 3. Scan files → 4. Review suggestions. Changes
+          always need your approval.
+        </p>
+        {notice && <p role="status">{notice}</p>}
+        {busy === "picker" && (
+          <p role="status">
+            Waiting for the Mac folder picker… It may be behind your browser
+            window.
+          </p>
+        )}
+      </Card>
+    );
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -186,7 +253,6 @@ function App() {
         setState(
           await request<AppState>(`/api/state?${query}`, undefined, signal),
         );
-        setError("");
       } catch (reason) {
         if ((reason as Error).name !== "AbortError")
           setError((reason as Error).message);
@@ -324,6 +390,15 @@ function App() {
             <h1>{page}</h1>
           </div>
           <div className="top-actions">
+            <button
+              disabled={!!busy || loading}
+              onClick={() => {
+                setError("");
+                void loadState();
+              }}
+            >
+              Refresh status
+            </button>
             {page === "Files" && (
               <label className="search">
                 <span className="sr-only">Search files</span>
@@ -358,6 +433,45 @@ function App() {
           )}
         </main>
       </div>
+      {folderDialog && (
+        <div className="dialog-backdrop" role="presentation">
+          <section
+            className="dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="folder-title"
+          >
+            <h2 id="folder-title">Connect this folder?</h2>
+            <code className="root-code">{rootPath}</code>
+            <p>
+              This only adds the folder to your dashboard. Click Scan afterwards
+              to build a local catalog. No files will be moved, deleted or
+              uploaded.
+            </p>
+            <div className="dialog-actions">
+              <button disabled={!!busy} onClick={() => setFolderDialog(false)}>
+                Cancel
+              </button>
+              <button
+                className="primary"
+                disabled={!!busy}
+                onClick={() =>
+                  action("root", "/api/roots", { path: rootPath }, () => {
+                    setFolderDialog(false);
+                    setRootPath("");
+                    setPage("Overview");
+                    setNotice(
+                      "Folder connected. Click Scan to read its files. Scan again whenever you want to sync the catalog.",
+                    );
+                  })
+                }
+              >
+                Connect folder
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {planDialog && (
         <div className="dialog-backdrop" role="presentation">
           <section
@@ -490,6 +604,7 @@ function App() {
               <button onClick={() => setPage("Files")}>Browse catalog</button>
             )}
           </section>
+          {folderChoices()}
           {Boolean(state.summary.incompleteRoots?.length) && (
             <div
               className="alert warning"
@@ -521,11 +636,15 @@ function App() {
           </section>
           <section className="split">
             <Card
-              title="Approved roots"
+              title="Your connected folders"
               action={
                 <button onClick={() => setPage("Settings")}>Manage</button>
               }
             >
+              <p className="muted">
+                Scan reads files locally. Scan again to sync new or changed
+                files—never to upload or delete them.
+              </p>
               {state.roots.length ? (
                 state.roots.map((root) => (
                   <div className="root-row" key={root.id}>
@@ -539,14 +658,14 @@ function App() {
                         action("scan", "/api/scan", { rootId: root.id })
                       }
                     >
-                      Scan
+                      {root.scanStatus ? "Sync catalog" : "Scan"}
                     </button>
                   </div>
                 ))
               ) : (
                 <Empty
                   title="No folder approved"
-                  text="Start with a generated fixture. Nothing on your Mac will be scanned."
+                  text="Choose a folder above, or try Create safe demo first. Nothing is scanned automatically."
                 />
               )}
             </Card>
@@ -898,29 +1017,33 @@ function App() {
       );
     return (
       <section className="settings-grid">
-        <Card title="Approved roots">
-          <form
-            className="root-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              action("root", "/api/roots", { path: rootPath }, () =>
-                setRootPath(""),
-              );
-            }}
-          >
-            <label>
-              Folder path
-              <input
-                placeholder="/Users/you/Documents/Test Folder"
-                value={rootPath}
-                onChange={(e) => setRootPath(e.target.value)}
-                required
-              />
-            </label>
-            <button className="primary" disabled={!!busy}>
-              Approve root
-            </button>
-          </form>
+        {folderChoices()}
+        <Card title="Your connected folders">
+          <details>
+            <summary>Advanced: enter a folder path</summary>
+            <form
+              className="root-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                action("root", "/api/roots", { path: rootPath }, () =>
+                  setRootPath(""),
+                );
+              }}
+            >
+              <label>
+                Folder path
+                <input
+                  placeholder="/Users/you/Documents/Test Folder"
+                  value={rootPath}
+                  onChange={(e) => setRootPath(e.target.value)}
+                  required
+                />
+              </label>
+              <button className="primary" disabled={!!busy}>
+                Approve root
+              </button>
+            </form>
+          </details>
           {state.roots.map((root) => (
             <code className="root-code" key={root.id}>
               {root.path}

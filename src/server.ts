@@ -5,6 +5,7 @@ import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { Engine, type FileRecord, type Root } from "./core.ts";
 import { buildPayload, classify, type JevPayload } from "./jev.ts";
+import { pickFolder } from "./folder-picker.ts";
 
 const project = fileURLToPath(new URL("../", import.meta.url));
 const allowedAgent = new Set([
@@ -17,7 +18,12 @@ const allowedAgent = new Set([
 const equal = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 export async function startServer(
-  options: { dataDir?: string; port?: number; apiKey?: string } = {},
+  options: {
+    dataDir?: string;
+    port?: number;
+    apiKey?: string;
+    folderPicker?: (location: unknown) => Promise<string | null>;
+  } = {},
 ) {
   const dataDir = path.resolve(
     options.dataDir ||
@@ -52,6 +58,7 @@ export async function startServer(
   await lock.writeFile(String(process.pid));
   await lock.close();
   const engine = new Engine(dataDir);
+  let pickerOpen = false;
   await engine.reconcile();
   const browserToken = randomBytes(32).toString("hex"),
     agentToken = randomBytes(32).toString("hex");
@@ -158,6 +165,22 @@ export async function startServer(
           case "/api/roots":
             result = await engine.addRoot(body.path);
             break;
+          case "/api/folder-picker": {
+            if (pickerOpen)
+              throw Error(
+                "A folder picker is already open. Choose or cancel in that window.",
+              );
+            pickerOpen = true;
+            try {
+              const selected = await (options.folderPicker || pickFolder)(
+                body.location,
+              );
+              result = { path: selected, cancelled: !selected };
+            } finally {
+              pickerOpen = false;
+            }
+            break;
+          }
           case "/api/demo":
             result = await engine.demo();
             break;

@@ -26,7 +26,10 @@ The launcher can use the existing private `~/.jev-router.env` without copying it
 Port selection is automatic and remembered; no claim is made that it was never used.
 The old dashboard on port 54873 is not reused.
 
-Start with **Create safe demo**, then **Scan**. Register personal folders only after
+Use **Downloads**, **Desktop**, **Documents** or **Choose another folder** to open the Mac
+folder picker, then **Connect folder** and **Scan**. Repeat with **Sync catalog** when
+files change; **Refresh status** only updates the display. Neither uploads files.
+Alternatively start with **Create safe demo**, then **Scan**. Register personal folders only after
 reviewing the [verification limits](docs/VERIFICATION.md). Quarantine keeps files on the
 same volume and does **not** free disk space; permanent deletion is intentionally absent.
 No system repair, cache purge, or backup deletion runs automatically.

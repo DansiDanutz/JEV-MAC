@@ -855,3 +855,31 @@ td code {
     scroll-behavior: auto !important;
   }
 }
+.folder-choices {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+.folder-choices button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 8px;
+  min-height: 96px;
+  padding: 16px;
+}
+.folder-choices small {
+  color: var(--muted, #5f6b66);
+  font-weight: 400;
+}
+details summary {
+  cursor: pointer;
+  padding: 12px 0;
+}
+@media (max-width: 820px) {
+  .folder-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

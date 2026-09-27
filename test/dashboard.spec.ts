@@ -187,7 +187,7 @@ test("keeps a stopping job active until its work settles", async ({ page }) => {
   await expect(pending).toBeVisible();
   await expect(pending).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "Scan", exact: true }),
+    page.getByRole("button", { name: "Sync catalog", exact: true }),
   ).toBeDisabled();
 
   release();
@@ -196,7 +196,7 @@ test("keeps a stopping job active until its work settles", async ({ page }) => {
     .toBe("cancelled");
   await expect(page.getByText("No active job")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Scan", exact: true }),
+    page.getByRole("button", { name: "Sync catalog", exact: true }),
   ).toBeEnabled();
 });
 
@@ -215,13 +215,13 @@ test("stops a scan, rescans, and reconnects to the persisted session", async ({
   );
 
   await openDashboard(page);
-  await page.getByRole("button", { name: "Scan" }).click();
+  await page.getByRole("button", { name: /^(Scan|Sync catalog)$/ }).click();
   await expect(page.getByRole("button", { name: "Stop safely" })).toBeVisible();
   await page.getByRole("button", { name: "Stop safely" }).click();
   await waitForLatestJob(app, "scan", "cancelled");
   await expect(page.getByText("No active job")).toBeVisible();
 
-  await page.getByRole("button", { name: "Scan" }).click();
+  await page.getByRole("button", { name: /^(Scan|Sync catalog)$/ }).click();
   await waitForLatestJob(app, "scan", "complete");
   await expect.poll(() => app.engine.state().summary.files).toBe(354);
 
