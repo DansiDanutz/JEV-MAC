@@ -21,6 +21,8 @@ Platform: this Apple Silicon Mac, Node 26.10.0; no runtime replacement.
 - Native clang static analysis passed with no diagnostics after descriptor-error checks.
 - npm production dependency audit reported zero known vulnerabilities.
 - Launcher zsh syntax check passed.
+- Actual launcher started the service, opened its authenticated browser and answered the
+  CLI status request with an empty catalog and Jev configured. No personal root was registered.
 - Screenshot inspected at 1440×1000 with synthetic catalog: legible layout, actual
   counts, visible logical-size caveat and no clipped primary controls.
 

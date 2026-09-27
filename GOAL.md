@@ -12,7 +12,7 @@ were rerun successfully. See docs/VERIFICATION.md for exact evidence and limitat
 - [x] Shared CLI/MCP and portable agent skill; actual MCP protocol smoke test.
 - [x] Automated tests, actual browser workflow and macOS fixture restore drill.
 - [x] Independent architectural conditional approval, cleanup pass and fresh regression run.
-- [ ] Documentation and commits pushed to GitHub (update after push verification).
+- [x] Documentation and implementation pushed to GitHub (be920a1 baseline).
 - [ ] User-selected real-data pilot and actual harness compatibility checks (require user context where unavailable).
 
 No personal folder is selected implicitly. Never mark unperformed live tests passed.
