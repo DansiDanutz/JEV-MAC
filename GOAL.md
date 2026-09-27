@@ -14,6 +14,8 @@ were rerun successfully. See docs/VERIFICATION.md for exact evidence and limitat
 - [x] Independent architectural conditional approval, cleanup pass and fresh regression run.
 - [x] Documentation and implementation pushed to GitHub (be920a1 baseline).
 - [x] Codex, Claude Code and Kimi MCP registration plus model-driven status calls against an isolated catalog.
+- [x] Automated MCP scan/plan/metadata-preview/cancel/rescan workflow with unchanged-source checks.
+- [ ] Full model-driven scan/plan/cancel workflow in each supported harness (status calls alone do not satisfy this gate).
 - [ ] User-selected real-data pilot plus GLM-host compatibility check (require user context where unavailable).
 
 No personal folder is selected implicitly. Never mark unperformed live tests passed.

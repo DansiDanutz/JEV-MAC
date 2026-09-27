@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
+import type { Engine, Job, Plan } from "../src/core.ts";
 
 test("HTTP authentication, Origin policy, agent boundaries, durable lock and CLI transport", async () => {
   const dataDir = await fs.mkdtemp("/private/tmp/jev-http-test-");
@@ -78,9 +79,14 @@ test("HTTP authentication, Origin policy, agent boundaries, durable lock and CLI
   }
 });
 
-test("MCP stdio advertises only constrained tools and reads the same catalog", async () => {
+test("MCP scans, previews, cancels and rescans without mutation authority", async () => {
   const dataDir = await fs.mkdtemp("/private/tmp/jev-mcp-test-");
   const app = await startServer({ dataDir, port: 0 });
+  const rootPath = `${dataDir}/fixture`;
+  await fs.mkdir(rootPath);
+  await fs.writeFile(`${rootPath}/notes.txt`, "Synthetic harness fixture\n");
+  // Test setup supplies the human-approved root; MCP cannot register roots.
+  const root = await app.engine.addRoot(rootPath);
   const client = new Client({ name: "jev-mac-test", version: "1.0.0" });
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -101,6 +107,23 @@ test("MCP stdio advertises only constrained tools and reads the same catalog", a
   });
   try {
     await client.connect(transport);
+    async function call<T>(name: string, args: Record<string, unknown> = {}) {
+      const result = await client.callTool({ name: `jev_mac_${name}`, arguments: args });
+      assert.equal(result.isError, undefined, JSON.stringify(result));
+      const content = result.content as { type: string; text?: string }[];
+      assert.equal(content[0]?.type, "text");
+      return JSON.parse(content[0].text!) as T;
+    }
+    async function settled(id: string) {
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline) {
+        const state = await call<ReturnType<Engine["state"]>>("status");
+        const job = state.jobs.find((candidate) => candidate.id === id);
+        if (job && !["running", "stopping"].includes(job.status)) return job;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      throw Error(`MCP job ${id} did not settle`);
+    }
     const { tools } = await client.listTools();
     assert.deepEqual(tools.map((t) => t.name).sort(), [
       "jev_mac_cancel",
@@ -120,6 +143,36 @@ test("MCP stdio advertises only constrained tools and reads the same catalog", a
       arguments: {},
     });
     assert.equal(denied.isError, true);
+    const scan = await call<Job>("scan", { rootId: root.id });
+    assert.equal((await settled(scan.id)).status, "complete");
+    const state = await call<ReturnType<Engine["state"]>>("status");
+    assert.equal(state.summary.files, 1);
+    const fileIds = state.files.map((file) => file.id);
+    const plan = await call<Plan>("plan", { kind: "organize", fileIds });
+    assert.equal(plan.status, "pending");
+    assert.equal(plan.items.length, 1);
+    await call("classify_preview", { fileIds });
+    for (const name of ["roots", "apply", "restore", "classify"]) {
+      const denied = await client.callTool({
+        name: `jev_mac_${name}`, arguments: { planId: plan.id, confirmation: plan.id },
+      });
+      assert.equal(denied.isError, true, name);
+    }
+    // Hold real engine work so cancellation is deterministic across transport latency.
+    const held = app.engine.start("fixture-cancellation", async (signal) => {
+      if (!signal.aborted) await new Promise<void>((resolve) =>
+        signal.addEventListener("abort", () => resolve(), { once: true }));
+      signal.throwIfAborted();
+    });
+    await call("cancel", { jobId: held.id });
+    assert.equal((await settled(held.id)).status, "cancelled");
+    const rescan = await call<Job>("scan", { rootId: root.id });
+    assert.equal((await settled(rescan.id)).status, "complete");
+    const final = await call<ReturnType<Engine["state"]>>("status");
+    assert.equal(final.operations.length, 0);
+    assert.equal(final.plans.find((item) => item.id === plan.id)?.status, "pending");
+    assert.equal(await fs.readFile(`${rootPath}/notes.txt`, "utf8"), "Synthetic harness fixture\n");
+    assert.deepEqual(await fs.readdir(rootPath), ["notes.txt"]);
   } finally {
     await client.close();
     await app.close();
