@@ -13,13 +13,15 @@ were rerun successfully. See docs/VERIFICATION.md for exact evidence and limitat
 - [x] Automated tests, actual browser workflow and macOS fixture restore drill.
 - [x] Independent architectural conditional approval, cleanup pass and fresh regression run.
 - [x] Documentation and implementation pushed to GitHub (be920a1 baseline).
-- [ ] User-selected real-data pilot and actual harness compatibility checks (require user context where unavailable).
+- [x] Codex inline MCP registration and model-driven status call against an isolated catalog.
+- [ ] User-selected real-data pilot plus Claude Code, Kimi and GLM-host compatibility checks (require user context where unavailable).
 
 No personal folder is selected implicitly. Never mark unperformed live tests passed.
 
 Next user input: a full path to one noncritical folder for read-only pilot, and the host
-client to use for GLM. The reply “ok” did not identify either. Harness registration is
-documented but existing configurations have not been modified. Real cloud-placeholder
+client to use for GLM. The reply “ok” did not identify either. Codex was verified through
+an inline, non-persistent MCP registration; existing harness configurations have not been
+modified. Claude Code, Kimi and the selected GLM host remain unverified. Real cloud-placeholder
 behavior, large-library performance and complete backup validation remain unproven.
 Visual/video similarity is not implemented; exact hashes and bounded lexical references
 must not be represented as perceptual matching or full dependency analysis.
