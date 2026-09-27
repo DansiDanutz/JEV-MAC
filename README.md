@@ -34,6 +34,13 @@ reviewing the [verification limits](docs/VERIFICATION.md). Quarantine keeps file
 same volume and does **not** free disk space; permanent deletion is intentionally absent.
 No system repair, cache purge, or backup deletion runs automatically.
 
+In **Review / Plans**, each exact-duplicate group has **Keep this copy**, **Select other
+copies**, **Preview quarantine**, and **Ignore group** controls. Preview shows the kept
+path and the exact copies to quarantine; approval is separate. The kept copy is checked
+again before applying. Ignored groups can be brought back and reappear when group
+membership changes. Named AGENTS.md, CLAUDE.md and GEMINI.md files are protected even
+when they contain identical text. Different project locations may still be intentional.
+
 ## Verify and connect agents
 
 ```sh

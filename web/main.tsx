@@ -28,7 +28,13 @@ type FileItem = {
   protectedReason?: string;
   classification?: string;
 };
-type Duplicate = { hash: string; files: FileItem[]; logicalBytes: number };
+type Duplicate = {
+  hash: string;
+  files: FileItem[];
+  logicalBytes: number;
+  ignored?: boolean;
+  totalFiles?: number;
+};
 type Finding = {
   id: string;
   severity: string;
@@ -48,6 +54,7 @@ type Plan = {
   status: string;
   items: PlanItem[];
   createdAt: string;
+  keeper?: { path: string };
 };
 type Operation = {
   id: string;
@@ -130,6 +137,7 @@ function App() {
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showIgnored, setShowIgnored] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState("");
@@ -492,6 +500,13 @@ function App() {
                 you independently purge it.
               </div>
             )}
+            {planDialog.keeper && (
+              <div className="keep-summary">
+                <strong>This copy stays in place</strong>
+                <code>{planDialog.keeper.path}</code>
+                <small>It will be checked again before quarantine.</small>
+              </div>
+            )}
             <div className="plan-items">
               {planDialog.items.map((item) => (
                 <div key={item.fileId}>
@@ -852,33 +867,60 @@ function App() {
               </button>
             )}
           </div>
-          <section className="split">
+          <section className="split review-layout">
             <Card title="Duplicate groups">
+              <p className="muted">
+                Choose a copy to keep first, then select the others to preview
+                quarantine. Identical content does not mean every location is
+                unnecessary.
+              </p>
+              <label className="ignored-toggle">
+                <input
+                  type="checkbox"
+                  checked={showIgnored}
+                  onChange={(e) => setShowIgnored(e.target.checked)}
+                />
+                Show ignored groups (
+                {state.duplicates.filter((g) => g.ignored).length})
+              </label>
               {state.duplicates.length ? (
-                state.duplicates.map((group) => (
-                  <details key={group.hash}>
-                    <summary>
-                      <span>{group.files.length} exact files</span>
-                      <strong>{formatBytes(group.logicalBytes)} logical</strong>
-                    </summary>
-                    {group.files.map((file) => (
-                      <label className="duplicate-file" key={file.id}>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(file.id)}
-                          onChange={() => toggle(file.id)}
-                        />
-                        <code>{file.path}</code>
-                      </label>
-                    ))}
-                  </details>
-                ))
+                state.duplicates
+                  .filter((group) => showIgnored || !group.ignored)
+                  .map((group) => (
+                    <DuplicateReview
+                      key={group.hash}
+                      group={group}
+                      disabled={!!busy || !!activeJob}
+                      onIgnore={() =>
+                        action("ignore", "/api/duplicate-ignore", {
+                          hash: group.hash,
+                          ignored: !group.ignored,
+                        })
+                      }
+                      onPreview={(keepFileId, fileIds) =>
+                        action(
+                          "duplicate-plan",
+                          "/api/duplicate-plan",
+                          { keepFileId, fileIds },
+                          (result) => setPlanDialog(result),
+                        )
+                      }
+                    />
+                  ))
               ) : (
                 <Empty
                   title="No exact duplicates"
                   text="Duplicate groups appear after hashing completes."
                 />
               )}
+              {!!state.duplicates.length &&
+                !showIgnored &&
+                state.duplicates.every((group) => group.ignored) && (
+                  <p role="status">
+                    All displayed groups are ignored. Turn on “Show ignored
+                    groups” to bring them back.
+                  </p>
+                )}
             </Card>
             <Card title="Plans">
               {state.plans.length ? (
@@ -1079,6 +1121,137 @@ function App() {
       </section>
     );
   }
+}
+
+function DuplicateReview({
+  group,
+  disabled,
+  onIgnore,
+  onPreview,
+}: {
+  group: Duplicate;
+  disabled: boolean;
+  onIgnore: () => void;
+  onPreview: (keeper: string, ids: string[]) => void;
+}) {
+  const [keepId, setKeepId] = useState("");
+  const [copies, setCopies] = useState<Set<string>>(new Set());
+  const keeper = group.files.find((f) => f.id === keepId);
+  const eligible = group.files.filter(
+    (f) =>
+      keeper &&
+      f.id !== keeper.id &&
+      !f.protectedReason &&
+      f.rootId === keeper.rootId,
+  );
+  const selectedIds = eligible.filter((f) => copies.has(f.id)).map((f) => f.id);
+  return (
+    <article
+      className="duplicate-group"
+      aria-label={`Duplicate group: ${group.files[0]?.relativePath}`}
+    >
+      <div className="duplicate-heading">
+        <strong>
+          {group.totalFiles || group.files.length} identical files
+        </strong>
+        <span>{formatBytes(group.logicalBytes)} logical duplicate size</span>
+      </div>
+      {(group.totalFiles || 0) > group.files.length && (
+        <p>
+          Showing the first {group.files.length} copies. Only visible,
+          explicitly selected copies can be planned.
+        </p>
+      )}
+      {group.ignored && <p className="status">Ignored — files untouched</p>}
+      {group.files.map((file) => (
+        <div
+          className={`duplicate-copy ${keeper?.id === file.id ? "is-kept" : ""}`}
+          key={file.id}
+        >
+          <div className="duplicate-copy-name">
+            <strong>{file.path.split("/").pop()}</strong>
+            <code>{file.path.slice(0, file.path.lastIndexOf("/"))}</code>
+            <small>
+              {formatBytes(file.size)} · {file.category || "file"}
+            </small>
+            {file.protectedReason && (
+              <p className="protected-note">
+                Protected: {file.protectedReason}
+              </p>
+            )}
+          </div>
+          <div className="duplicate-copy-actions">
+            <button
+              aria-pressed={keeper?.id === file.id}
+              disabled={disabled || group.ignored}
+              onClick={() => {
+                setKeepId(file.id);
+                setCopies(new Set());
+              }}
+            >
+              {keeper?.id === file.id ? "Keeping this copy" : "Keep this copy"}
+            </button>
+            <label>
+              <input
+                type="checkbox"
+                aria-label={`Quarantine ${file.relativePath}`}
+                checked={selectedIds.includes(file.id)}
+                disabled={
+                  disabled ||
+                  group.ignored ||
+                  !eligible.some((f) => f.id === file.id)
+                }
+                onChange={() =>
+                  setCopies((current) => {
+                    const next = new Set(current);
+                    next.has(file.id)
+                      ? next.delete(file.id)
+                      : next.add(file.id);
+                    return next;
+                  })
+                }
+              />
+              Quarantine copy
+            </label>
+          </div>
+        </div>
+      ))}
+      {!keeper && !group.ignored && (
+        <p className="muted">
+          Start by choosing “Keep this copy” on the file you want to retain.
+        </p>
+      )}
+      {keeper && group.files.some((f) => f.rootId !== keeper.rootId) && (
+        <p className="muted">
+          Copies in another connected folder are not selected together. Review
+          that folder separately.
+        </p>
+      )}
+      <div className="duplicate-controls">
+        <button
+          disabled={disabled || group.ignored || !eligible.length}
+          onClick={() => setCopies(new Set(eligible.map((f) => f.id)))}
+        >
+          Select other copies
+        </button>
+        <button
+          className="primary"
+          disabled={disabled || group.ignored || !selectedIds.length}
+          onClick={() => keeper && onPreview(keeper.id, selectedIds)}
+        >
+          Preview quarantine
+          {selectedIds.length ? ` (${selectedIds.length})` : ""}
+        </button>
+        <button disabled={disabled} onClick={onIgnore}>
+          {group.ignored ? "Bring group back" : "Ignore group"}
+        </button>
+      </div>
+      <small className="muted">
+        Preview changes nothing. Quarantine requires a separate approval and
+        remains reversible.
+      </small>
+    </article>
+  );
 }
 
 function Card({

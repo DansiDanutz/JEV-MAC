@@ -98,6 +98,7 @@ export type Plan = {
   status: string;
   items: Item[];
   createdAt: string;
+  keeper?: { rootId: string; source: string; path: string; identity: Identity };
 };
 export type Operation = {
   id: string;
@@ -549,9 +550,14 @@ export class Engine {
   }
   duplicates() {
     const map = new Map<string, FileRecord[]>();
+    const reviews = new Map(
+      this.list<{ id: string; fingerprint: string; ignored: boolean }>(
+        "duplicate-review",
+      ).map((review) => [review.id, review]),
+    );
     for (const f of this.list<FileRecord>("file")) {
       const arr = map.get(f.hash) || [];
-      arr.push(f);
+      arr.push(this.withProtection(f));
       map.set(f.hash, arr);
     }
     return [...map.entries()]
@@ -559,10 +565,89 @@ export class Engine {
       .map(([hash, files]) => ({
         hash,
         files,
+        ignored: Boolean(
+          reviews.get(hash)?.ignored &&
+            reviews.get(hash)?.fingerprint === this.groupFingerprint(files),
+        ),
         logicalBytes:
           files[0].size *
           (new Set(files.map((f) => `${f.dev}:${f.ino}`)).size - 1),
       }));
+  }
+  private withProtection(file: FileRecord): FileRecord {
+    return /^(AGENTS|CLAUDE|GEMINI)\.md$/i.test(
+      path.basename(file.relativePath),
+    )
+      ? {
+          ...file,
+          protectedReason:
+            "Named agent instruction file: keep its required filename and location.",
+        }
+      : file;
+  }
+  private groupFingerprint(files: FileRecord[]) {
+    return JSON.stringify(files.map((f) => f.path).sort());
+  }
+  ignoreDuplicate(hash: unknown, ignored: unknown) {
+    if (typeof hash !== "string" || typeof ignored !== "boolean")
+      throw Error("Invalid review choice");
+    const group = this.duplicates().find((g) => g.hash === hash);
+    if (!group) throw Error("Duplicate group changed. Refresh and try again.");
+    this.put("duplicate-review", {
+      id: hash,
+      ignored,
+      fingerprint: this.groupFingerprint(group.files),
+    });
+    return { ignored };
+  }
+  async makeDuplicatePlan(keepFileId: unknown, ids: unknown) {
+    if (
+      typeof keepFileId !== "string" ||
+      !Array.isArray(ids) ||
+      ids.includes(keepFileId) ||
+      !ids.length
+    )
+      throw Error("Choose one copy to keep and at least one different copy");
+    const keeper = this.get<FileRecord>("file", keepFileId);
+    const copies = ids.map((id) => this.get<FileRecord>("file", id));
+    if (
+      copies.some((f) => f.hash !== keeper.hash || f.rootId !== keeper.rootId)
+    )
+      throw Error("Choose matching copies within the same connected folder");
+    const root = this.get<Root>("root", keeper.rootId);
+    await this.validateRoot(root);
+    const identity = await this.inspect(root, keeper.relativePath);
+    if (!this.identical(identity, keeper))
+      throw Error("The kept copy changed. Sync catalog first.");
+    const plan = await this.makePlan("quarantine", ids);
+    plan.keeper = {
+      rootId: root.id,
+      source: keeper.relativePath,
+      path: keeper.path,
+      identity,
+    };
+    for (const item of plan.items)
+      item.reason = `Exact-content duplicate; keep ${keeper.relativePath}. Quarantine does not reclaim disk space.`;
+    this.put("plan", plan);
+    return plan;
+  }
+  private async checkKeeper(plan: Plan, signal: AbortSignal) {
+    if (!plan.keeper) return;
+    try {
+      const root = this.get<Root>("root", plan.keeper.rootId);
+      await this.validateRoot(root);
+      if (
+        !this.identical(
+          await this.inspect(root, plan.keeper.source, signal),
+          plan.keeper.identity,
+        )
+      )
+        throw Error("changed");
+    } catch {
+      throw Error(
+        "The copy selected to keep changed or is missing. Sync catalog and create a new preview.",
+      );
+    }
   }
   async makePlan(kind: unknown, ids: unknown) {
     if (this.degraded)
@@ -587,7 +672,8 @@ export class Engine {
     for (const f of files) {
       if (f.rootId !== root.id)
         throw Error("A plan must stay within one root and volume");
-      if (f.protectedReason) throw Error(f.protectedReason);
+      if (this.withProtection(f).protectedReason)
+        throw Error(this.withProtection(f).protectedReason);
       await this.assertUnprotected(root, f.relativePath);
       const identity = await this.inspect(root, f.relativePath);
       if (identity.dev !== root.dev)
@@ -625,6 +711,8 @@ export class Engine {
     );
   }
   async assertUnprotected(root: Root, relative: string) {
+    if (/^(AGENTS|CLAUDE|GEMINI)\.md$/i.test(path.basename(relative)))
+      throw Error("Named agent instruction files are protected");
     if (
       relative
         .split(path.sep)
@@ -708,6 +796,7 @@ export class Engine {
       this.mutation = true;
       try {
         // Validate the whole plan before the first mutation.
+        await this.checkKeeper(plan, signal);
         for (const item of plan.items) {
           signal.throwIfAborted();
           await this.assertUnprotected(root, item.source);
@@ -721,6 +810,7 @@ export class Engine {
         }
         for (const item of plan.items) {
           if (signal.aborted) break;
+          await this.checkKeeper(plan, signal);
           await this.validateRoot(root);
           await this.assertUnprotected(root, item.source);
           const op: Operation = {
@@ -850,7 +940,9 @@ export class Engine {
     }
   }
   state(search = "", offset = 0, limit = 100) {
-    const all = this.list<FileRecord>("file");
+    const all = this.list<FileRecord>("file").map((file) =>
+      this.withProtection(file),
+    );
     const filtered = all.filter((f) =>
       `${f.relativePath} ${f.category}`
         .toLowerCase()
@@ -863,9 +955,11 @@ export class Engine {
       jobs: this.list<Job>("job").slice(0, 100),
       files: filtered.slice(offset, offset + limit),
       fileTotal: filtered.length,
-      duplicates: duplicates
-        .slice(0, 100)
-        .map((g) => ({ ...g, files: g.files.slice(0, 100) })),
+      duplicates: duplicates.slice(0, 100).map((g) => ({
+        ...g,
+        totalFiles: g.files.length,
+        files: g.files.slice(0, 100),
+      })),
       findings: this.list("finding").slice(0, 300),
       plans: this.list<Plan>("plan").slice(0, 100),
       operations: this.list<Operation>("operation").slice(0, 300),

@@ -193,6 +193,15 @@ export async function startServer(
           case "/api/plan":
             result = await engine.makePlan(body.kind, body.fileIds);
             break;
+          case "/api/duplicate-plan":
+            result = await engine.makeDuplicatePlan(
+              body.keepFileId,
+              body.fileIds,
+            );
+            break;
+          case "/api/duplicate-ignore":
+            result = engine.ignoreDuplicate(body.hash, body.ignored);
+            break;
           case "/api/apply":
             result = await engine.apply(
               body.planId,
