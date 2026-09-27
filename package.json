@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "cli": "tsx src/cli.ts",
     "mcp": "tsx src/mcp.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:harness": "tsx scripts/harness-smoke.ts"
   },
   "dependencies": {
     "react": "^19.2.0",

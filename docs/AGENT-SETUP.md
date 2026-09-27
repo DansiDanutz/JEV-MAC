@@ -26,6 +26,24 @@ Codex uses its own configuration shape, so do not paste the JSON into TOML direc
 
 ## Tested client registrations
 
+To rerun the full synthetic client acceptance check, use one of:
+
+```sh
+npm run test:harness -- codex
+npm run test:harness -- claude
+npm run test:harness -- kimi
+```
+
+These opt-in checks use the client's existing authentication and incur model usage.
+Each creates an isolated service and synthetic root, asks the model to cancel a held
+test job, scan twice, and preview organization and classification. Assertions inspect
+actual service calls, completed jobs, pending plans, and unchanged source files.
+The held job tests cancellation transport; it is not a large-file scan benchmark.
+Private diagnostics remain in the printed temporary directory. The service stops afterward.
+Kimi requires an already trusted workspace and temporarily creates `.kimi-code/mcp.json`;
+the check refuses to overwrite an existing file and removes its own configuration on exit.
+Codex and Claude use invocation-only MCP configuration. No harness check approves plans.
+
 Set `JEV_MAC` to this checkout's absolute path in the examples below. Start the service
 first and verify `npm run cli -- status` succeeds.
 

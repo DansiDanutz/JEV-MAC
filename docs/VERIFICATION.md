@@ -21,6 +21,10 @@ Platform: this Apple Silicon Mac, Node 26.10.0; no runtime replacement.
   deterministically held engine job, and rescans successfully. It verifies the plan stays
   pending, no operations occur, and source contents and directory entries stay unchanged.
   The held cancellation job is synthetic work, not a large-file scan performance test.
+- `npm run test:harness -- codex`, `-- claude` and `-- kimi` passed real model-driven workflows:
+  cancel a held job, complete two scans, preview organization and metadata, retain a
+  pending plan, and leave source files unchanged. The reusable runner checks successful
+  service requests and durable engine state; client prose is not the pass criterion.
 - Codex CLI 0.157.0 accepted an inline, non-persistent stdio MCP registration and a real
   model-driven session invoked `jev_mac_status` exactly once against an isolated catalog.
   It correctly reported no approved roots, files or active jobs. No normal Codex config
@@ -63,8 +67,8 @@ and further jobs are fenced until storage is resolved and the service restarted.
 - Folder overlap is hash evidence for inspected files, not proof of backup restoration,
   version supersession, or redundancy of excluded files.
 - Codex, Claude Code and Kimi registration/model-driven status workflows are verified.
-  Their full model-driven scan/plan/cancel flows remain untested; the automated MCP
-  workflow above establishes transport/engine behavior, not that per-client acceptance gate.
+  All three full synthetic workflows also pass the reusable harness check. These checks
+  do not establish GLM compatibility or real-data pilot acceptance.
   No standalone glm executable was found; GLM needs a chosen host client.
 - No permanent deletion, automatic Trash emptying, system repair or background cleanup.
   Quarantine does not free space. Partial copy failures retain a .jev-part file for
