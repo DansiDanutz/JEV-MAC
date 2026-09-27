@@ -12,4 +12,3 @@ Claude Code, Codex, Kimi and GLM-backed clients will use the same constrained to
 not separate unrestricted deletion scripts.
 
 No personal files have been scanned, moved, uploaded or deleted by this project.
-

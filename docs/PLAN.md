@@ -134,4 +134,3 @@ memory and cancellation latency on documented fixtures before setting performanc
 Each milestone records changed files, commands, results and untested gaps.
 A dashboard is not called working until its user-facing workflow has been exercised end-to-end.
 Implementation starts with milestone 1; this planning commit contains no executable dashboard.
-

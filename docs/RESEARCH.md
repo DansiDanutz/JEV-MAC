@@ -42,4 +42,3 @@ No upstream safety thresholds are accepted as permission to delete.
 - Evaluate macOS Trash/restore and metadata behavior across APFS and external volumes.
 - Confirm each target harness supports our selected MCP transport and approval flow;
   GLM is a model backend, so integration depends on its host client.
-

@@ -12,4 +12,3 @@
 - All dashboard, CLI and MCP mutations must pass the same policy engine.
 - Test cancellation, restart, stale plans, symlink races, collisions and restore.
 - Report untested behavior honestly. A passing unit suite is not Mac end-to-end proof.
-
