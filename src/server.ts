@@ -2,6 +2,7 @@ import http from "node:http";
 import { promises as fs } from "node:fs";
 import { Pairing } from "./pairing.ts";
 import { startUsageRecorder } from "./usage-recorder.ts";
+import { routerHealth } from "./router-health.ts";
 import path from "node:path";
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -147,6 +148,7 @@ export async function startServer(
           return send(res, 200, { ...await collectAnalytics({ cached: engine.list<any>("jev-cache"), attempts: engine.list<any>("jev-request").length, store: receipts }), recorder: recorder?.status() ?? null });
         }
         if (req.method === "GET" && url.pathname === "/api/state") {
+          // File catalog state is separate from router evidence.
           const offset = Math.max(
               0,
               Number(url.searchParams.get("offset")) || 0,
@@ -171,6 +173,8 @@ export async function startServer(
             },
           });
         }
+        if (req.method === "GET" && url.pathname === "/api/router-health")
+          return send(res, 200, await routerHealth(receipts.list()));
         if (req.method !== "POST")
           return send(res, 405, { error: "Method not allowed" });
         if (browser && req.headers.origin !== origin)

@@ -64,6 +64,27 @@ test.beforeAll(async () => {
   app = await startServer({ dataDir, port: 0 });
 });
 
+test("router health shows evidence without claiming live reliability and handles errors", async ({ page }) => {
+  let fail = false;
+  await page.route("**/api/router-health", route => fail ? route.fulfill({ status: 500, json: { error: "fixture" } }) : route.fulfill({ json: {
+    checkedAt: "2026-09-28T00:00:00Z", version: "0.3.0", recordedDecisions: 1,
+    privacy: { restricted: true, directoryMode: "700", checkedFiles: 1, insecureFiles: 0, skippedFiles: 0, complete: true },
+    recent: [{ at: "2026-09-28T00:00:00Z", harness: "codex", model: "test-model", tokens: 1785 }],
+  } }));
+  await openDashboard(page);
+  await page.getByRole("button", { name: "Router Health", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "JEV Router checks" })).toBeVisible();
+  await expect(page.getByText("Checked log permissions are restricted", { exact: true })).toBeVisible();
+  await expect(page.getByText("codex → test-model", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.getByRole("button", { name: "Refresh router checks" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  fail = true;
+  await page.getByRole("button", { name: "Refresh router checks" }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not check the router");
+});
+
 test("connects an isolated browser with a one-time code and recovers an expired session", async ({ page, browser }) => {
   await openDashboard(page);
   await page.getByRole("button", { name: "Settings", exact: true }).click();

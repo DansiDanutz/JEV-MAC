@@ -8,6 +8,7 @@ import React, {
 import { createRoot } from "react-dom/client";
 import "./style.css";
 import { Analytics } from "./Analytics.tsx";
+import { RouterHealth } from "./RouterHealth.tsx";
 import { Connect, ConnectionCode } from "./Connect.tsx";
 
 type Root = { id: string; path: string; scanStatus?: string };
@@ -86,6 +87,7 @@ type AppState = {
 };
 type Page =
   | "JEV Analytics"
+  | "Router Health"
   | "Overview"
   | "Files"
   | "Review / Plans"
@@ -107,6 +109,7 @@ const emptyState: AppState = {
 };
 const pages: { name: Page; icon: string }[] = [
   { name: "JEV Analytics", icon: "▥" },
+  { name: "Router Health", icon: "⇄" },
   { name: "Overview", icon: "⌂" },
   { name: "Files", icon: "▤" },
   { name: "Review / Plans", icon: "◇" },
@@ -416,7 +419,7 @@ function App() {
             <h1>{page}</h1>
           </div>
           <div className="top-actions">
-            {page !== "JEV Analytics" && <button
+            {page !== "JEV Analytics" && page !== "Router Health" && <button
               disabled={!!busy || loading}
               onClick={() => {
                 setError("");
@@ -444,7 +447,7 @@ function App() {
           </div>
         </header>
         <main className="content">
-          {page !== "JEV Analytics" && state.plans.some((p) => ["pending", "ready"].includes(p.status)) && (
+          {page !== "JEV Analytics" && page !== "Router Health" && state.plans.some((p) => ["pending", "ready"].includes(p.status)) && (
             <Card title="Your next step: review these files">
               <p>Nothing moves until you confirm. Open a preview below to see exactly what will happen.</p>
               {state.plans.filter((p) => ["pending", "ready"].includes(p.status)).map((plan) => (
@@ -458,7 +461,7 @@ function App() {
               ))}
             </Card>
           )}
-          {page !== "JEV Analytics" && state.operations.some((op) => op.kind === "quarantine" && op.status === "complete") && (
+          {page !== "JEV Analytics" && page !== "Router Health" && state.operations.some((op) => op.kind === "quarantine" && op.status === "complete") && (
             <Card title="Files moved safely — nothing permanently deleted">
               <p>{state.operations.filter((op) => op.kind === "quarantine" && op.status === "complete").length} file(s) are in recoverable quarantine. This does not free disk space.</p>
               <ul>{state.operations.filter((op) => op.kind === "quarantine" && op.status === "complete").slice(0, 3).map((op) => <li key={op.id}>{op.source}</li>)}</ul>
@@ -630,6 +633,7 @@ function App() {
 
   function renderPage() {
     if (page === "JEV Analytics") return <Analytics request={request} />;
+    if (page === "Router Health") return <RouterHealth request={request} />;
     if (page === "Overview")
       return (
         <>
