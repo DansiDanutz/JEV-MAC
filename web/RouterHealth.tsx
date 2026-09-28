@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import type { routerHealth } from "../src/router-health.ts";
+import { OpenRouterPilot } from "./OpenRouterPilot.tsx";
 type Health = Awaited<ReturnType<typeof routerHealth>>;
-export function RouterHealth({ request }: { request: <T>(path: string) => Promise<T> }) {
+export function RouterHealth({ request }: { request: <T>(path: string, init?: RequestInit) => Promise<T> }) {
   const [report, setReport] = useState<Health | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
   async function refresh() {
     setBusy(true); setError("");
@@ -11,6 +12,7 @@ export function RouterHealth({ request }: { request: <T>(path: string) => Promis
   }
   useEffect(() => { void refresh(); }, [request]);
   return <section className="jev-analytics">
+    <OpenRouterPilot request={request} />
     <div className="section-toolbar"><div><h2>JEV Router checks</h2><p>Local evidence, not a guarantee of reliability.</p></div><button disabled={busy} onClick={refresh}>{busy ? "Checking…" : "Refresh router checks"}</button></div>
     {error && <p role="alert">{error}</p>}
     {!report ? <p role="status">{busy ? "Reading local installation and permissions…" : "No report loaded."}</p> : <>

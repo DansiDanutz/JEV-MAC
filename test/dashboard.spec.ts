@@ -32,6 +32,15 @@ async function waitForLatestJob(
 
 test.describe.configure({ mode: "serial" });
 
+test("OpenRouter pilot stays opt-in and shows unknown billing honestly", async ({ page }) => {
+  await page.route("**/api/openrouter-pilot", route => route.fulfill({ json: { configured: false, model: "typesafe/jev-router", prompt: "Synthetic fixture", limit: "One attempt per day", records: [{ id: "fixture", status: "complete", correct: true, durationMs: 12, inputTokens: null, outputTokens: null, reportedCostUsd: null }] } }));
+  await openDashboard(page);
+  await page.getByRole("button", { name: "Router Health", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "OpenRouter JEV pilot — opt-in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run synthetic router test" })).toBeDisabled();
+  await expect(page.getByText(/Reported USD: unknown/)).toBeVisible();
+});
+
 test("Local Storage is read-only on open and offers connected-folder review", async ({ page }) => {
   await openDashboard(page);
   await page.getByRole("button", { name: "Local Storage", exact: true }).click();
