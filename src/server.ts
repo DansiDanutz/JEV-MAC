@@ -7,6 +7,7 @@ import { Engine, type FileRecord, type Root } from "./core.ts";
 import { buildPayload, classify, type JevPayload } from "./jev.ts";
 import { pickFolder } from "./folder-picker.ts";
 import { collectAnalytics } from "./analytics.ts";
+import { ReceiptStore, receiptId } from "./receipts.ts";
 
 const project = fileURLToPath(new URL("../", import.meta.url));
 const allowedAgent = new Set([
@@ -59,6 +60,7 @@ export async function startServer(
   await lock.writeFile(String(process.pid));
   await lock.close();
   const engine = new Engine(dataDir);
+  const receipts = new ReceiptStore(dataDir);
   let pickerOpen = false;
   await engine.reconcile();
   const browserToken = randomBytes(32).toString("hex"),
@@ -122,7 +124,7 @@ export async function startServer(
             error: "This action requires human approval in the dashboard",
           });
         if (req.method === "GET" && url.pathname === "/api/jev-analytics") {
-          return send(res, 200, await collectAnalytics({ cached: engine.list<any>("jev-cache"), attempts: engine.list<any>("jev-request").length }));
+          return send(res, 200, await collectAnalytics({ cached: engine.list<any>("jev-cache"), attempts: engine.list<any>("jev-request").length, store: receipts }));
         }
         if (req.method === "GET" && url.pathname === "/api/state") {
           const offset = Math.max(
@@ -281,9 +283,12 @@ export async function startServer(
                 };
                 engine.put("jev-request", usage);
                 output = await classify(preview.payload, { apiKey, signal });
-                engine.put("jev-cache", { id: cacheId, output } as {
+                const eventId = receiptId("jev-mac", usage.id);
+                engine.put("jev-cache", { id: cacheId, output, receiptId: eventId } as {
                   id: string;
                 });
+                const roots = [...new Set(preview.fileIds.map(id => engine.get<FileRecord>("file", id).rootId))];
+                receipts.add({ id: eventId, source: "jev-mac", project: roots.length === 1 ? `root-${roots[0]}` : "multiple-roots", occurredAt: new Date().toISOString(), inputTokens: output.usage.input_tokens, outputTokens: output.usage.output_tokens });
               }
               for (const answer of output.results) {
                 signal.throwIfAborted();
@@ -396,6 +401,7 @@ export async function startServer(
     close: async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await engine.close();
+      receipts.close();
       await fs.unlink(lockPath);
     },
   };

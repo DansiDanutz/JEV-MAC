@@ -17,7 +17,7 @@ export function Analytics({ request }: { request: <T>(path: string) => Promise<T
     <div className="section-toolbar"><div><h2>JEV on this Mac</h2><p>Usage evidence, available tools, and what they optimize.</p></div><button disabled={busy} onClick={refresh}>{busy ? "Reading local records…" : "Refresh JEV analytics"}</button></div>
     {error && <p role="alert">{error}</p>}
     {!report ? <p role="status">{busy ? "Checking known JEV logs. No paid calls or uploads." : "No report loaded."}</p> : <>
-      <p>Checked {new Date(report.collectedAt).toLocaleString()}. Read-only; no background auditing.</p>
+      <p>Checked {new Date(report.collectedAt).toLocaleString()}. Numeric receipts are preserved locally on refresh. No background auditing or paid calls.</p>
       <section className="card"><h2>Recorded usage — not lifetime totals</h2>
         <h3>{report.meteredRecords ? count(report.totalInput + report.totalOutput) + " JEV tokens" : "Token usage unavailable"}</h3>
         <p>{count(report.totalInput)} input · {count(report.totalOutput)} output from {count(report.meteredRecords)} retained metered records.</p>

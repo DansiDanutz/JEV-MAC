@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { receiptId, type ReceiptStore } from "./receipts.ts";
 
 type Row = Record<string, any>;
 export type UsageSource = {
@@ -59,7 +60,7 @@ export const features = [
   { skill: "typesafe-ai", title: "Project decision API", use: "Build constrained classifications and routing into your own projects.", command: "Ask your agent to use typesafe-ai with a bounded schema and usage receipts.", caveat: "JEV-MAC file classification is opt-in metadata-only with a 20-request daily ceiling and identical-payload caching. Hashing, scanning and quarantine use no JEV tokens." },
 ];
 
-export async function collectAnalytics(options: { home?: string; temp?: string; cached?: Row[]; attempts?: number } = {}) {
+export async function collectAnalytics(options: { home?: string; temp?: string; cached?: Row[]; attempts?: number; store?: ReceiptStore } = {}) {
   const home = options.home ?? os.homedir();
   const temp = options.temp ?? os.tmpdir();
   const sources: UsageSource[] = [];
@@ -73,12 +74,28 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
       for (const r of history) {
         if (!r || typeof r !== "object") continue;
         const id = JSON.stringify([r.at, r.model, r.jev?.response?.usage]);
-        if (!seen.has(id)) { rows.push(r); seen.add(id); }
+        if (!seen.has(id)) {
+          rows.push(r); seen.add(id);
+          const usage = r.jev?.response?.usage ?? r.usage;
+          if (options.store && number(usage?.input_tokens) && number(usage?.output_tokens) && typeof r.at === "number" && Number.isFinite(new Date(r.at).getTime())) {
+            options.store.add({ id: receiptId("router", file + ":" + r.at), source: "router", project: "unattributed", occurredAt: new Date(r.at).toISOString(), inputTokens: usage.input_tokens, outputTokens: usage.output_tokens });
+          }
+        }
       }
     } catch { routerWarnings.push("One router file was unreadable, malformed or over the size limit."); }
   }
   const router = summarize("Codex / Claude router", "Temporary jev-claude session status", rows);
+  const saved = options.store?.list() ?? [];
+  const toRow = (r: typeof saved[number]) => ({ date: r.occurredAt, usage: { input_tokens: r.inputTokens, output_tokens: r.outputTokens } });
+  if (options.store) {
+    const persisted = summarize("Codex / Claude router", "Durable receipts imported from temporary session history", saved.filter(r => r.source === "router").map(toRow));
+    // Unmetered current entries remain visible; stored metered entries replace, not add to, live ones.
+    persisted.records += router.records - router.metered;
+    persisted.models = router.models;
+    Object.assign(router, persisted);
+  }
   router.warnings.push("At most 20 recent decisions per session; temporary files can disappear. Not installation-to-date usage.", ...routerWarnings);
+  if (options.store) router.warnings.push("Metered receipts seen on refresh are saved locally and survive temporary-log removal. No background collector is running; activity between refreshes can still be missed. Model counts describe currently retained source history only.");
   sources.push(router);
   const hermes = path.join(home, ".hermes");
   const profileDirs = [hermes, ...(await names(path.join(hermes, "profiles"))).map(n => path.join(hermes, "profiles", n))];
@@ -95,9 +112,22 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
     if (invalid) source.warnings.push(`${invalid} malformed or unreadable records/files excluded.`);
     sources.push(source);
   }
-  const mac = summarize("JEV-MAC classification", "Local catalog: unique cached responses", options.cached ?? []);
+  const savedIds = new Set(saved.map(r => r.id));
+  const mac = summarize("JEV-MAC classification", "Durable receipts plus legacy unique cached responses", [
+    ...(options.cached ?? []).filter(r => !r.receiptId || !savedIds.has(r.receiptId)),
+    ...saved.filter(r => r.source === "jev-mac").map(toRow),
+  ]);
   mac.warnings.push(`${options.attempts ?? 0} recorded request attempts; cached responses are not a full request ledger. Cache reuse is not counted as another API call.`);
+  for (const project of [...new Set(saved.filter(r => r.source === "jev-mac").map(r => r.project))]) {
+    const matching = saved.filter(r => r.source === "jev-mac" && r.project === project);
+    mac.warnings.push(`Source-folder attribution ${project}: ${matching.reduce((n, r) => n + r.inputTokens + r.outputTokens, 0)} recorded JEV tokens. Folder ID is not a project-name inference.`);
+  }
   sources.push(mac);
+  for (const project of [...new Set(saved.filter(r => r.source === "project-import").map(r => r.project))]) {
+    const source = summarize(`Project: ${project}`, "Explicit imported JEV usage receipts (self-reported)", saved.filter(r => r.source === "project-import" && r.project === project).map(toRow));
+    source.warnings.push("Importer must exclude router and JEV-MAC calls already captured here. Not provider-verified billing.");
+    sources.push(source);
+  }
   const catalog = await Promise.all(features.map(async feature => ({ ...feature, installed: await present(path.join(home, ".agents", "skills", feature.skill, "SKILL.md")) || await present(path.join(home, ".codex", "skills", feature.skill, "SKILL.md")) })));
   const installations = await Promise.all([
     ["JEV CLI", ".local/bin/jev"],
