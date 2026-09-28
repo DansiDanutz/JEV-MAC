@@ -10,6 +10,22 @@ test("analytics counts valid receipts and omits private content", () => {
   assert.equal(r.input, 1597); assert.equal(r.output, 170); assert.equal(r.metered, 1);
   assert.ok(!JSON.stringify(r).includes("PRIVATE"));
 });
+test("harness attribution is conservative and undated receipts remain counted", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "jev-harness-test-"));
+  const store = new ReceiptStore(path.join(root, "ledger"));
+  try {
+    await fs.mkdir(path.join(root, "jev-claude"));
+    const dated = { at: 1790466997725, model: "example-model", usage: { input_tokens: 10, output_tokens: 2 } };
+    await fs.writeFile(path.join(root, "jev-claude", "codex-123.json"), JSON.stringify(dated));
+    await fs.writeFile(path.join(root, "jev-claude", "unknown.json"), JSON.stringify({ usage: { input_tokens: 3, output_tokens: 1 } }));
+    const report = await collectAnalytics({ home: root, temp: root, store });
+    assert.equal(report.totalInput, 13);
+    assert.equal(report.harnesses.find(h => h.name === "Codex")?.input, 10);
+    assert.equal(report.harnesses.find(h => h.name === "Kimi")?.records, 0);
+    assert.equal(report.daily["2026-09-26"].input, 10);
+    assert.equal((await collectAnalytics({ home: root, temp: root, store })).totalInput, 13);
+  } finally { store.close(); await fs.rm(root, { recursive: true, force: true }); }
+});
 test("analytics reports gaps and deduplicates session history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "jev-analytics-test-"));
   try {

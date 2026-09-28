@@ -406,7 +406,7 @@ function App() {
             <h1>{page}</h1>
           </div>
           <div className="top-actions">
-            <button
+            {page !== "JEV Analytics" && <button
               disabled={!!busy || loading}
               onClick={() => {
                 setError("");
@@ -414,7 +414,7 @@ function App() {
               }}
             >
               Refresh status
-            </button>
+            </button>}
             {page === "Files" && (
               <label className="search">
                 <span className="sr-only">Search files</span>
@@ -434,7 +434,7 @@ function App() {
           </div>
         </header>
         <main className="content">
-          {state.plans.some((p) => ["pending", "ready"].includes(p.status)) && (
+          {page !== "JEV Analytics" && state.plans.some((p) => ["pending", "ready"].includes(p.status)) && (
             <Card title="Your next step: review these files">
               <p>Nothing moves until you confirm. Open a preview below to see exactly what will happen.</p>
               {state.plans.filter((p) => ["pending", "ready"].includes(p.status)).map((plan) => (
@@ -448,7 +448,7 @@ function App() {
               ))}
             </Card>
           )}
-          {state.operations.some((op) => op.kind === "quarantine" && op.status === "complete") && (
+          {page !== "JEV Analytics" && state.operations.some((op) => op.kind === "quarantine" && op.status === "complete") && (
             <Card title="Files moved safely — nothing permanently deleted">
               <p>{state.operations.filter((op) => op.kind === "quarantine" && op.status === "complete").length} file(s) are in recoverable quarantine. This does not free disk space.</p>
               <ul>{state.operations.filter((op) => op.kind === "quarantine" && op.status === "complete").slice(0, 3).map((op) => <li key={op.id}>{op.source}</li>)}</ul>

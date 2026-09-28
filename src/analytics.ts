@@ -8,10 +8,11 @@ export type UsageSource = {
   name: string; location: string; records: number; metered: number;
   input: number; output: number; models: Record<string, number>;
   earliest: string | null; latest: string | null; warnings: string[];
+  daily: Record<string, { input: number; output: number; records: number }>;
 };
 const number = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 export function summarize(name: string, location: string, rows: Row[]): UsageSource {
-  const result: UsageSource = { name, location, records: rows.length, metered: 0, input: 0, output: 0, models: {}, earliest: null, latest: null, warnings: [] };
+  const result: UsageSource = { name, location, records: rows.length, metered: 0, input: 0, output: 0, models: {}, earliest: null, latest: null, warnings: [], daily: {} };
   for (const row of rows) {
     const usage = row.jev?.response?.usage ?? row.output?.usage ?? row.usage;
     if (number(usage?.input_tokens) && number(usage?.output_tokens)) {
@@ -25,6 +26,10 @@ export function summarize(name: string, location: string, rows: Row[]): UsageSou
       const d = new Date(raw);
       if (Number.isFinite(d.getTime())) {
         const t = d.toISOString();
+        if (number(usage?.input_tokens) && number(usage?.output_tokens)) {
+          const day = result.daily[t.slice(0, 10)] ??= { input: 0, output: 0, records: 0 };
+          day.input += usage.input_tokens; day.output += usage.output_tokens; day.records++;
+        }
         if (!result.earliest || t < result.earliest) result.earliest = t;
         if (!result.latest || t > result.latest) result.latest = t;
       }
@@ -66,6 +71,7 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
   const sources: UsageSource[] = [];
   const dir = path.join(temp, "jev-claude");
   const rows: Row[] = []; const routerWarnings: string[] = [];
+  const codexRows: Row[] = []; const otherRouterRows: Row[] = []; const unsavedRows: Row[] = [];
   for (const file of (await names(dir)).filter(n => n.endsWith(".json"))) {
     try {
       const value = JSON.parse(await read(path.join(dir, file)));
@@ -76,10 +82,11 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
         const id = JSON.stringify([r.at, r.model, r.jev?.response?.usage]);
         if (!seen.has(id)) {
           rows.push(r); seen.add(id);
+          (/^codex-\d+\.json$/.test(file) ? codexRows : otherRouterRows).push(r);
           const usage = r.jev?.response?.usage ?? r.usage;
           if (options.store && number(usage?.input_tokens) && number(usage?.output_tokens) && typeof r.at === "number" && Number.isFinite(new Date(r.at).getTime())) {
             options.store.add({ id: receiptId("router", file + ":" + r.at), source: "router", project: "unattributed", occurredAt: new Date(r.at).toISOString(), inputTokens: usage.input_tokens, outputTokens: usage.output_tokens });
-          }
+          } else unsavedRows.push(r);
         }
       }
     } catch { routerWarnings.push("One router file was unreadable, malformed or over the size limit."); }
@@ -88,9 +95,8 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
   const saved = options.store?.list() ?? [];
   const toRow = (r: typeof saved[number]) => ({ date: r.occurredAt, usage: { input_tokens: r.inputTokens, output_tokens: r.outputTokens } });
   if (options.store) {
-    const persisted = summarize("Codex / Claude router", "Durable receipts imported from temporary session history", saved.filter(r => r.source === "router").map(toRow));
+    const persisted = summarize("Codex / Claude router", "Durable receipts imported from temporary session history", [...saved.filter(r => r.source === "router").map(toRow), ...unsavedRows]);
     // Unmetered current entries remain visible; stored metered entries replace, not add to, live ones.
-    persisted.records += router.records - router.metered;
     persisted.models = router.models;
     Object.assign(router, persisted);
   }
@@ -141,8 +147,19 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
     ["Ultrafast browser checkout", "ZCodeProject/jev-ultrafast"],
     ["GrokBot research pilot checkout", "ZCodeProject/GrokBot-jev-research-pilot"],
   ].map(async ([name, location]) => ({ name, location, present: await present(path.join(home, location)) })));
+  const harnesses = [
+    { ...summarize("Codex", "Current codex-PID router history", codexRows), note: "JEV router decisions only, not Codex task tokens. Historical receipts without harness metadata remain in the combined total." },
+    { ...summarize("Claude Code / unidentified router sessions", "Other current router session histories", otherRouterRows), note: "Claude uses session IDs; filenames alone do not establish harness identity. These records are not automatically attributed to Claude." },
+    ...sources.filter(s => s.name === "Hermes decision log" || s.name === "JEV-MAC classification" || s.name.startsWith("Project:")).map(s => ({ ...s, note: s.warnings.join(" ") })),
+    ...["Kimi", "GLM", "Other harnesses"].map(name => ({ ...summarize(name, "No dedicated attributable receipt adapter", []), note: "No attributable usage available. This is not zero usage. Import explicit project receipts; model names alone do not identify a harness." })),
+  ];
+  const daily: UsageSource["daily"] = {};
+  for (const source of sources) for (const [date, value] of Object.entries(source.daily)) {
+    const day = daily[date] ??= { input: 0, output: 0, records: 0 };
+    day.input += value.input; day.output += value.output; day.records += value.records;
+  }
   return {
-    collectedAt: new Date().toISOString(), sources, features: catalog, installations,
+    collectedAt: new Date().toISOString(), sources, features: catalog, installations, harnesses, daily,
     totalInput: sources.reduce((n, s) => n + s.input, 0), totalOutput: sources.reduce((n, s) => n + s.output, 0),
     meteredRecords: sources.reduce((n, s) => n + s.metered, 0),
     unmeteredRecords: sources.reduce((n, s) => n + s.records - s.metered, 0),

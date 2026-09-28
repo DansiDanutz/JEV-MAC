@@ -37,12 +37,19 @@ test("analytics distinguishes recorded tokens from unmeasured savings", async ({
     collectedAt: "2026-09-28T00:00:00Z", totalInput: 12, totalOutput: 3,
     meteredRecords: 1, unmeteredRecords: 20, sources: [], features: [], installations: [],
     coverage: "Partial local evidence only.", baselineTokens: null, measuredSavings: null,
+    daily: { "2026-09-28": { input: 12, output: 3, records: 1 } },
+    harnesses: [{ name: "Codex", records: 1, metered: 1, input: 12, output: 3, models: { "test-model": 1 }, note: "Current history only" }, { name: "Kimi", records: 0, metered: 0, input: 0, output: 0, models: {}, note: "No attributable usage" }],
   } }));
   await openDashboard(page);
   await page.getByRole("button", { name: "JEV Analytics", exact: true }).click();
   await expect(page.getByRole("heading", { name: "15 JEV tokens", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Without JEV / tokens saved: not measured" })).toBeVisible();
   await expect(page.getByText("20 records have no token counts.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toHaveCount(0);
+  await page.getByLabel("Show harness").selectOption("Kimi");
+  await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
+  await expect(page.getByText("No attributable records available", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Daily recorded JEV usage (UTC)" })).toBeVisible();
   await page.getByRole("button", { name: "Refresh JEV analytics", exact: true }).click();
   await expect(page.getByRole("heading", { name: "15 JEV tokens", exact: true })).toBeVisible();
 });

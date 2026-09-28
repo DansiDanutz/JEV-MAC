@@ -5,6 +5,7 @@ export function Analytics({ request }: { request: <T>(path: string) => Promise<T
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [harness, setHarness] = useState("All");
   async function refresh() {
     setBusy(true); setError("");
     try { setReport(await request<Report>("/api/jev-analytics")); }
@@ -25,6 +26,15 @@ export function Analytics({ request }: { request: <T>(path: string) => Promise<T
         <h3>Without JEV / tokens saved: not measured</h3><p>No matched baseline. Routing changes model choice, not necessarily token quantity.</p>
       </section>
       <div className="alert warning">{report.coverage}</div>
+      <section className="card"><h2>Usage by harness</h2>
+        <p>Current router history and retained source records. This breakdown overlaps the total above; do not add it again. Missing history cannot be assigned to a harness retrospectively.</p>
+        <label>Show harness <select value={harness} onChange={e => setHarness(e.target.value)}><option>All</option>{[...new Set((report.harnesses ?? []).map(h => h.name))].map(name => <option key={name}>{name}</option>)}</select></label>
+        {(report.harnesses ?? []).filter(h => harness === "All" || h.name === harness).map((h, i) => <article className="operation" key={i}><h3>{h.name}</h3><p>{h.records ? `${count(h.records)} records · ${count(h.metered)} metered · ${count(h.input + h.output)} recorded JEV tokens` : "No attributable records available"}</p><p>{h.note}</p>{Object.entries(h.models).map(([model, n]) => <p key={model}><code>{model}</code>: {n} recorded decisions</p>)}</article>)}
+      </section>
+      <section className="card"><h2>Daily recorded JEV usage (UTC)</h2><p>Only dated, metered records. Missing days mean no evidence—not no usage.</p>
+        {Object.keys(report.daily ?? {}).length ? Object.entries(report.daily).sort(([a], [b]) => b.localeCompare(a)).map(([date, day]) => <p key={date}><strong>{date}</strong> · {count(day.input)} input · {count(day.output)} output · {count(day.records)} receipts</p>) : <p>No dated token receipts available.</p>}
+        <p>Downstream agent tokens, cash cost, cache savings, latency and task success are not measured by these receipts.</p>
+      </section>
       <section className="card"><h2>Installed integration locations</h2><p>Presence checks only. A checkout or plugin folder does not prove it is enabled or serving production projects.</p>{report.installations.map(i => <p key={i.location}><strong>{i.name}: {i.present ? "found" : "not found"}</strong><br/><code>~/{i.location}</code></p>)}</section>
       <section className="card"><h2>Where the numbers come from</h2>{report.sources.map((s, i) => <article className="operation" key={i}>
         <h3>{s.name}</h3><code>{s.location}</code><p>{s.records} retained records · {s.metered} with token receipts · {count(s.input + s.output)} recorded tokens</p>

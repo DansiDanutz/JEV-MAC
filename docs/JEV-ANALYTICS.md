@@ -77,3 +77,16 @@ native adapters. Imports are labeled self-reported, not provider-verified. No
 existing agent hooks, peer configurations or upstream packages are modified.
 This is not continuous cross-harness capture: producers still need to emit receipts,
 and router activity can be missed between manual refreshes.
+# Harness and daily views
+
+The analytics page separates current `codex-PID` router histories from other,
+unidentified session histories, Hermes logs, JEV-MAC and explicit project imports.
+Claude session filenames alone are not proof of harness identity. Kimi, GLM and
+other harnesses show missing evidence, never fabricated zero usage. Historical
+router receipts retain combined totals but have no retroactive harness attribution.
+The harness view overlaps the main total and must not be summed into it.
+
+Daily UTC totals include only dated metered records; undated metered records remain
+in the main total. Missing days do not establish inactivity. No provider pricing,
+downstream tokens, latency, task-success or baseline savings are inferred.
+Analytics hides file-operation notices and uses one dedicated refresh button.
