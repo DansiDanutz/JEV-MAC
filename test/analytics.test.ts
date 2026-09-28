@@ -5,6 +5,27 @@ import os from "node:os";
 import path from "node:path";
 import { collectAnalytics, summarize } from "../src/analytics.ts";
 import { ReceiptStore } from "../src/receipts.ts";
+test("router variants and colliding timestamps survive source removal", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "jev-variants-"));
+  const store = new ReceiptStore(path.join(root, "ledger"));
+  try {
+    await fs.mkdir(path.join(root, "jev-claude"));
+    const usage = (n: number) => ({ input_tokens: n, output_tokens: 1 });
+    const history = [
+      { at: 1790466997725, usage: usage(10) },
+      { at: 1790466997725, usage: usage(20) },
+      { at: "2026-09-26T21:16:37.725Z", output: { usage: usage(30) } },
+      { ts: 1790466997, usage: usage(40) },
+      { date: "2026-09-27T00:00:00Z", usage: usage(50) },
+    ];
+    const file = path.join(root, "jev-claude", "codex-456.json");
+    await fs.writeFile(file, JSON.stringify({ history }));
+    for (let i = 0; i < 2; i++) assert.equal((await collectAnalytics({ home: root, temp: root, store })).totalInput, 150);
+    assert.equal(store.list().length, 5);
+    await fs.unlink(file);
+    assert.equal((await collectAnalytics({ home: root, temp: root, store })).totalInput, 150);
+  } finally { store.close(); await fs.rm(root, { recursive: true, force: true }); }
+});
 test("analytics counts valid receipts and omits private content", () => {
   const r = summarize("test", "fixture", [{ prompt: "PRIVATE", model: "gpt-6-luna", usage: { input_tokens: 1597, output_tokens: 170 } }, { usage: { input_tokens: -1, output_tokens: 2 } }, { usage: { input_tokens: "12", output_tokens: 2 } }]);
   assert.equal(r.input, 1597); assert.equal(r.output, 170); assert.equal(r.metered, 1);

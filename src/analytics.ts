@@ -69,6 +69,7 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
   const home = options.home ?? os.homedir();
   const temp = options.temp ?? os.tmpdir();
   const sources: UsageSource[] = [];
+  const existingReceipts = new Map((options.store?.list() ?? []).map(r => [r.id, r]));
   const dir = path.join(temp, "jev-claude");
   const rows: Row[] = []; const routerWarnings: string[] = [];
   const codexRows: Row[] = []; const otherRouterRows: Row[] = []; const unsavedRows: Row[] = [];
@@ -79,14 +80,20 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
       const seen = new Set<string>();
       for (const r of history) {
         if (!r || typeof r !== "object") continue;
-        const id = JSON.stringify([r.at, r.model, r.jev?.response?.usage]);
+        const usage = r.jev?.response?.usage ?? r.output?.usage ?? r.usage;
+        const raw = r.at ?? (typeof r.ts === "number" ? r.ts * 1000 : r.ts) ?? r.date;
+        const date = typeof raw === "string" || typeof raw === "number" ? new Date(raw) : new Date(NaN);
+        const id = JSON.stringify([raw, r.model, usage]);
         if (!seen.has(id)) {
           rows.push(r); seen.add(id);
           (/^codex-\d+\.json$/.test(file) ? codexRows : otherRouterRows).push(r);
-          const usage = r.jev?.response?.usage ?? r.usage;
-          if (options.store && number(usage?.input_tokens) && number(usage?.output_tokens) && typeof r.at === "number" && Number.isFinite(new Date(r.at).getTime())) {
+          if (options.store && number(usage?.input_tokens) && number(usage?.output_tokens) && Number.isFinite(date.getTime())) {
             const model = typeof r.model === "string" && /^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,99}$/.test(r.model) && !/sk-|token|secret|key/i.test(r.model) ? r.model : undefined;
-            options.store.add({ id: receiptId("router", file + ":" + r.at), source: "router", project: "unattributed", occurredAt: new Date(r.at).toISOString(), inputTokens: usage.input_tokens, outputTokens: usage.output_tokens,
+            const legacyId = receiptId("router", file + ":" + r.at);
+            const legacy = existingReceipts.get(legacyId);
+            const compatible = legacy && legacy.inputTokens === usage.input_tokens && legacy.outputTokens === usage.output_tokens && legacy.model === model;
+            const eventId = compatible ? legacyId : receiptId("router", file + ":" + id);
+            options.store.add({ id: eventId, source: "router", project: "unattributed", occurredAt: date.toISOString(), inputTokens: usage.input_tokens, outputTokens: usage.output_tokens,
               harness: /^codex-\d+\.json$/.test(file) ? "codex" : "unknown", ...(model ? { model } : {}), outcome: "decision-recorded" });
           } else unsavedRows.push(r);
         }

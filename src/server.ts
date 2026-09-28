@@ -314,7 +314,9 @@ export async function startServer(
                   id: string;
                 });
                 const roots = [...new Set(preview.fileIds.map(id => engine.get<FileRecord>("file", id).rootId))];
-                receipts.add({ id: eventId, source: "jev-mac", project: roots.length === 1 ? `root-${roots[0]}` : "multiple-roots", occurredAt: new Date().toISOString(), inputTokens: output.usage.input_tokens, outputTokens: output.usage.output_tokens });
+                try {
+                  receipts.add({ id: eventId, source: "jev-mac", project: roots.length === 1 ? `root-${roots[0]}` : "multiple-roots", occurredAt: new Date().toISOString(), inputTokens: output.usage.input_tokens, outputTokens: output.usage.output_tokens });
+                } catch { console.warn("Usage receipt could not be saved; classification remains cached."); }
               }
               for (const answer of output.results) {
                 signal.throwIfAborted();

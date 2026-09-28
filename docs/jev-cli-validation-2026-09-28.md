@@ -1,5 +1,14 @@
 # JEV CLI validation — 2026-09-28
 
+## Subsequent approved configuration
+
+Default Hermes routing is now shadow. The elephant, nervix-dev, sienna and
+youtubestudiogrok profiles have explicit off overrides, because the default
+state is inherited. Read-back verified all five effective modes and unchanged
+skills/notice switches. The pre-change shared state was backed up alongside
+state.json. No restart or automatic model switching was performed. A real
+default-profile turn still needs to establish runtime decision-log evidence.
+
 Scope: installed hermes-jev-skills 0.18.0; synthetic inputs only; user-approved
 US$2 maximum for this test batch. This is a bounded smoke test, not proof of
 production reliability across every harness. Existing credentials were used by
