@@ -3,6 +3,8 @@ import { promises as fs } from "node:fs";
 import { Pairing } from "./pairing.ts";
 import { startUsageRecorder } from "./usage-recorder.ts";
 import { routerHealth } from "./router-health.ts";
+import { localStorageReport } from "./local-storage.ts";
+import { testOpenRouter, PILOT_PROMPT, ROUTER_MODEL } from "./openrouter-pilot.ts";
 import path from "node:path";
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -144,6 +146,12 @@ export async function startServer(
           return send(res, 403, {
             error: "This action requires human approval in the dashboard",
           });
+        if (req.method === "GET" && url.pathname === "/api/openrouter-pilot") {
+          return send(res, 200, { configured: Boolean(process.env.OPENROUTER_API_KEY), model: ROUTER_MODEL, prompt: PILOT_PROMPT, records: engine.list("openrouter-pilot"), limit: "One attempt per UTC day; no automatic routing." });
+        }
+        if (req.method === "GET" && url.pathname === "/api/local-storage") {
+          return send(res, 200, await localStorageReport(engine.state("", 0, Number.MAX_SAFE_INTEGER).files, engine.list<Root>("root"), dataDir));
+        }
         if (req.method === "GET" && url.pathname === "/api/jev-analytics") {
           return send(res, 200, { ...await collectAnalytics({ cached: engine.list<any>("jev-cache"), attempts: engine.list<any>("jev-request").length, store: receipts }), recorder: recorder?.status() ?? null });
         }
@@ -192,6 +200,21 @@ export async function startServer(
         const body = JSON.parse(text || "{}");
         let result: unknown;
         switch (url.pathname) {
+          case "/api/openrouter-pilot": {
+            if (body.consent !== true) return send(res, 400, { error: "Explicit synthetic test consent required" });
+            if (!process.env.OPENROUTER_API_KEY) return send(res, 400, { error: "OpenRouter key not configured in server environment" });
+            const id = new Date().toISOString().slice(0, 10);
+            if (engine.list<{ id: string }>("openrouter-pilot").some(r => r.id === id)) return send(res, 429, { error: "Daily pilot attempt already used" });
+            engine.put("openrouter-pilot", { id, status: "started" });
+            try {
+              const result = await testOpenRouter(process.env.OPENROUTER_API_KEY);
+              engine.put("openrouter-pilot", { id, status: "complete", ...result });
+              return send(res, 200, result);
+            } catch {
+              engine.put("openrouter-pilot", { id, status: "failed" });
+              return send(res, 502, { error: "Pilot failed or timed out. No retry; check provider access privately." });
+            }
+          }
           case "/api/connect-code":
             return send(res, 200, pairing.create());
           case "/api/roots":

@@ -974,3 +974,8 @@ details summary {
     grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
   }
 }
+.storage-candidates { display: grid; gap: 12px; margin-top: 16px; }
+.storage-candidate { border: 1px solid var(--border, #d6dfda); border-radius: 12px; padding: 16px; overflow-wrap: anywhere; }
+.storage-candidate label { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.openrouter-pilot { min-width: 0; overflow-wrap: anywhere; }
+.openrouter-pilot pre { white-space: pre-wrap; overflow-wrap: anywhere; }
