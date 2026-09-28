@@ -136,7 +136,7 @@ function statusClass(value: string) {
 
 function App() {
   const [token, setToken] = useState(
-    () => sessionStorage.getItem("jev-token") || "",
+    () => new URLSearchParams(location.hash.replace(/^#/, "")).get("token") || sessionStorage.getItem("jev-token") || "",
   );
   const [tokenDraft, setTokenDraft] = useState("");
   const [state, setState] = useState<AppState>(emptyState);
