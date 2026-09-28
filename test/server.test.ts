@@ -30,6 +30,10 @@ test("HTTP authentication, Origin policy, agent boundaries, durable lock and CLI
         body: JSON.stringify(body),
       });
     assert.equal((await fetch(app.origin + "/api/state")).status, 401);
+    assert.equal((await fetch(app.origin + "/api/jev-analytics")).status, 401);
+    assert.equal((await fetch(app.origin + "/api/jev-analytics", {
+      headers: { Authorization: `Bearer ${app.agentToken}` },
+    })).status, 403);
     assert.equal(
       (await post("/api/demo", {}, app.browserToken, "https://evil.example"))
         .status,

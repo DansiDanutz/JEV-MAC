@@ -32,6 +32,21 @@ async function waitForLatestJob(
 
 test.describe.configure({ mode: "serial" });
 
+test("analytics distinguishes recorded tokens from unmeasured savings", async ({ page }) => {
+  await page.route("**/api/jev-analytics", route => route.fulfill({ json: {
+    collectedAt: "2026-09-28T00:00:00Z", totalInput: 12, totalOutput: 3,
+    meteredRecords: 1, unmeteredRecords: 20, sources: [], features: [], installations: [],
+    coverage: "Partial local evidence only.", baselineTokens: null, measuredSavings: null,
+  } }));
+  await openDashboard(page);
+  await page.getByRole("button", { name: "JEV Analytics", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "15 JEV tokens", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Without JEV / tokens saved: not measured" })).toBeVisible();
+  await expect(page.getByText("20 records have no token counts.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh JEV analytics", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "15 JEV tokens", exact: true })).toBeVisible();
+});
+
 test.beforeAll(async () => {
   dataDir = await fs.mkdtemp("/private/tmp/jev-dashboard-data-");
   await build({

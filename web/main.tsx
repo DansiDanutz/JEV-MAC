@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { Analytics } from "./Analytics.tsx";
 
 type Root = { id: string; path: string; scanStatus?: string };
 type Job = {
@@ -83,6 +84,7 @@ type AppState = {
   fileTotal: number;
 };
 type Page =
+  | "JEV Analytics"
   | "Overview"
   | "Files"
   | "Review / Plans"
@@ -103,6 +105,7 @@ const emptyState: AppState = {
   fileTotal: 0,
 };
 const pages: { name: Page; icon: string }[] = [
+  { name: "JEV Analytics", icon: "▥" },
   { name: "Overview", icon: "⌂" },
   { name: "Files", icon: "▤" },
   { name: "Review / Plans", icon: "◇" },
@@ -616,6 +619,7 @@ function App() {
   );
 
   function renderPage() {
+    if (page === "JEV Analytics") return <Analytics request={request} />;
     if (page === "Overview")
       return (
         <>

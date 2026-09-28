@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { Engine, type FileRecord, type Root } from "./core.ts";
 import { buildPayload, classify, type JevPayload } from "./jev.ts";
 import { pickFolder } from "./folder-picker.ts";
+import { collectAnalytics } from "./analytics.ts";
 
 const project = fileURLToPath(new URL("../", import.meta.url));
 const allowedAgent = new Set([
@@ -120,6 +121,9 @@ export async function startServer(
           return send(res, 403, {
             error: "This action requires human approval in the dashboard",
           });
+        if (req.method === "GET" && url.pathname === "/api/jev-analytics") {
+          return send(res, 200, await collectAnalytics({ cached: engine.list<any>("jev-cache"), attempts: engine.list<any>("jev-request").length }));
+        }
         if (req.method === "GET" && url.pathname === "/api/state") {
           const offset = Math.max(
               0,
