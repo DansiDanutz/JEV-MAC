@@ -64,6 +64,26 @@ test.beforeAll(async () => {
   app = await startServer({ dataDir, port: 0 });
 });
 
+test("connects an isolated browser with a one-time code and recovers an expired session", async ({ page, browser }) => {
+  await openDashboard(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Create connection code", exact: true }).click();
+  const notice = page.getByRole("status").filter({ hasText: "Connection code:" });
+  await expect(notice).toBeVisible();
+  const code = await notice.locator("code").innerText();
+  const isolated = await browser.newContext();
+  try {
+    const other = await isolated.newPage();
+    await other.goto(`${app.origin}/#token=expired-test-session`);
+    await expect(other.getByRole("heading", { name: "Connect to JEV-MAC", exact: true })).toBeVisible();
+    await other.getByLabel("Connection code", { exact: true }).fill(code);
+    await other.getByRole("button", { name: "Connect this browser", exact: true }).click();
+    await expect(other.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+    await other.reload();
+    await expect(other.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  } finally { await isolated.close(); }
+});
+
 test.afterAll(async () => {
   if (app) await app.close();
   if (dataDir) await fs.rm(dataDir, { recursive: true, force: true });

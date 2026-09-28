@@ -8,6 +8,7 @@ import React, {
 import { createRoot } from "react-dom/client";
 import "./style.css";
 import { Analytics } from "./Analytics.tsx";
+import { Connect, ConnectionCode } from "./Connect.tsx";
 
 type Root = { id: string; path: string; scanStatus?: string };
 type Job = {
@@ -247,6 +248,11 @@ function App() {
       if (init?.body) headers.set("Content-Type", "application/json");
       const response = await fetch(path, { ...init, headers, signal });
       const body = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        sessionStorage.removeItem("jev-token");
+        setToken("");
+        setState(emptyState);
+      }
       if (!response.ok)
         throw new Error(
           body.error || body.message || `Request failed (${response.status})`,
@@ -344,10 +350,13 @@ function App() {
   if (!token)
     return (
       <main className="auth-shell">
-        <form className="auth-card" onSubmit={saveToken}>
+        <div className="auth-card">
           <div className="brand-mark">J</div>
           <p className="eyebrow">Local Mac organizer</p>
           <h1>Connect to JEV-MAC</h1>
+          <Connect onConnected={value => { sessionStorage.setItem("jev-token", value); setToken(value); setError(""); }} />
+          <details><summary>Advanced: use a local session token</summary>
+          <form onSubmit={saveToken}>
           <p className="muted">
             Enter the local session token supplied when the service starts. It
             stays in this browser session and is never displayed again.
@@ -366,7 +375,8 @@ function App() {
           <button className="primary" type="submit">
             Open dashboard
           </button>
-        </form>
+          </form></details>
+        </div>
       </main>
     );
 
@@ -1122,6 +1132,7 @@ function App() {
           ))}
         </Card>
         <Card title="Privacy and Jev">
+          <ConnectionCode request={request} />
           <div className="setting-row">
             <span>
               <strong>Jev classification</strong>

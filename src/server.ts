@@ -1,5 +1,6 @@
 import http from "node:http";
 import { promises as fs } from "node:fs";
+import { Pairing } from "./pairing.ts";
 import path from "node:path";
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -62,6 +63,7 @@ export async function startServer(
   const engine = new Engine(dataDir);
   const receipts = new ReceiptStore(dataDir);
   let pickerOpen = false;
+  const pairing = new Pairing();
   await engine.reconcile();
   const browserToken = randomBytes(32).toString("hex"),
     agentToken = randomBytes(32).toString("hex");
@@ -111,6 +113,21 @@ export async function startServer(
       if (req.headers.origin && req.headers.origin !== origin)
         return send(res, 403, { error: "Cross-origin requests are forbidden" });
       const url = new URL(req.url || "/", origin);
+      if (url.pathname === "/api/connect") {
+        if (req.method !== "POST" || req.headers.origin !== origin)
+          return send(res, 403, { error: "Connection requires a same-origin browser request" });
+        if (!req.headers["content-type"]?.startsWith("application/json"))
+          return send(res, 415, { error: "JSON required" });
+        let text = "";
+        for await (const chunk of req) {
+          text += chunk;
+          if (text.length > 256) return send(res, 413, { error: "Request too large" });
+        }
+        let code: unknown;
+        try { code = JSON.parse(text).code; } catch { return send(res, 400, { error: "Invalid connection request" }); }
+        if (!pairing.redeem(code)) return send(res, 401, { error: "Code invalid, expired or already used. Generate a new code in the unlocked browser’s Settings." });
+        return send(res, 200, { token: browserToken });
+      }
       if (url.pathname.startsWith("/api/")) {
         const token = (req.headers.authorization || "").replace(/^Bearer /, "");
         const browser = equal(token, browserToken),
@@ -168,6 +185,8 @@ export async function startServer(
         const body = JSON.parse(text || "{}");
         let result: unknown;
         switch (url.pathname) {
+          case "/api/connect-code":
+            return send(res, 200, pairing.create());
           case "/api/roots":
             result = await engine.addRoot(body.path);
             break;

@@ -30,6 +30,15 @@ test("HTTP authentication, Origin policy, agent boundaries, durable lock and CLI
         body: JSON.stringify(body),
       });
     assert.equal((await fetch(app.origin + "/api/state")).status, 401);
+    assert.equal((await post("/api/connect-code", {}, "")).status, 401);
+    assert.equal((await post("/api/connect-code", {}, app.agentToken)).status, 403);
+    const grant = await (await post("/api/connect-code", {})).json() as { code: string };
+    assert.equal((await post("/api/connect", { code: grant.code }, "", "https://evil.example")).status, 403);
+    assert.equal((await post("/api/connect", { code: grant.code }, "", "")).status, 403);
+    const connected = await post("/api/connect", { code: grant.code }, "");
+    assert.equal(connected.status, 200);
+    assert.equal((await connected.json() as { token: string }).token, app.browserToken);
+    assert.equal((await post("/api/connect", { code: grant.code }, "")).status, 401);
     assert.equal((await fetch(app.origin + "/api/jev-analytics")).status, 401);
     assert.equal((await fetch(app.origin + "/api/jev-analytics", {
       headers: { Authorization: `Bearer ${app.agentToken}` },
