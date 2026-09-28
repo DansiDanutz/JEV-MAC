@@ -232,6 +232,9 @@ code {
   max-width: 1440px;
   margin: 0 auto;
 }
+.jev-analytics > .card { margin: 20px 0; }
+.jev-analytics code, .jev-analytics li, .jev-analytics p { overflow-wrap: anywhere; }
+.jev-analytics summary { cursor: pointer; min-height: 44px; padding: 12px 0; }
 .content > .card {
   margin-bottom: 24px;
 }

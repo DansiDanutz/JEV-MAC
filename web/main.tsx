@@ -7,6 +7,9 @@ import React, {
 } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { Analytics } from "./Analytics.tsx";
+import { RouterHealth } from "./RouterHealth.tsx";
+import { Connect, ConnectionCode } from "./Connect.tsx";
 
 type Root = { id: string; path: string; scanStatus?: string };
 type Job = {
@@ -83,6 +86,8 @@ type AppState = {
   fileTotal: number;
 };
 type Page =
+  | "JEV Analytics"
+  | "Router Health"
   | "Overview"
   | "Files"
   | "Review / Plans"
@@ -103,6 +108,8 @@ const emptyState: AppState = {
   fileTotal: 0,
 };
 const pages: { name: Page; icon: string }[] = [
+  { name: "JEV Analytics", icon: "▥" },
+  { name: "Router Health", icon: "⇄" },
   { name: "Overview", icon: "⌂" },
   { name: "Files", icon: "▤" },
   { name: "Review / Plans", icon: "◇" },
@@ -129,7 +136,7 @@ function statusClass(value: string) {
 
 function App() {
   const [token, setToken] = useState(
-    () => sessionStorage.getItem("jev-token") || "",
+    () => new URLSearchParams(location.hash.replace(/^#/, "")).get("token") || sessionStorage.getItem("jev-token") || "",
   );
   const [tokenDraft, setTokenDraft] = useState("");
   const [state, setState] = useState<AppState>(emptyState);
@@ -244,6 +251,11 @@ function App() {
       if (init?.body) headers.set("Content-Type", "application/json");
       const response = await fetch(path, { ...init, headers, signal });
       const body = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        sessionStorage.removeItem("jev-token");
+        setToken("");
+        setState(emptyState);
+      }
       if (!response.ok)
         throw new Error(
           body.error || body.message || `Request failed (${response.status})`,
@@ -341,10 +353,13 @@ function App() {
   if (!token)
     return (
       <main className="auth-shell">
-        <form className="auth-card" onSubmit={saveToken}>
+        <div className="auth-card">
           <div className="brand-mark">J</div>
           <p className="eyebrow">Local Mac organizer</p>
           <h1>Connect to JEV-MAC</h1>
+          <Connect onConnected={value => { sessionStorage.setItem("jev-token", value); setToken(value); setError(""); }} />
+          <details><summary>Advanced: use a local session token</summary>
+          <form onSubmit={saveToken}>
           <p className="muted">
             Enter the local session token supplied when the service starts. It
             stays in this browser session and is never displayed again.
@@ -363,7 +378,8 @@ function App() {
           <button className="primary" type="submit">
             Open dashboard
           </button>
-        </form>
+          </form></details>
+        </div>
       </main>
     );
 
@@ -403,7 +419,7 @@ function App() {
             <h1>{page}</h1>
           </div>
           <div className="top-actions">
-            <button
+            {page !== "JEV Analytics" && page !== "Router Health" && <button
               disabled={!!busy || loading}
               onClick={() => {
                 setError("");
@@ -411,7 +427,7 @@ function App() {
               }}
             >
               Refresh status
-            </button>
+            </button>}
             {page === "Files" && (
               <label className="search">
                 <span className="sr-only">Search files</span>
@@ -431,7 +447,7 @@ function App() {
           </div>
         </header>
         <main className="content">
-          {state.plans.some((p) => ["pending", "ready"].includes(p.status)) && (
+          {page !== "JEV Analytics" && page !== "Router Health" && state.plans.some((p) => ["pending", "ready"].includes(p.status)) && (
             <Card title="Your next step: review these files">
               <p>Nothing moves until you confirm. Open a preview below to see exactly what will happen.</p>
               {state.plans.filter((p) => ["pending", "ready"].includes(p.status)).map((plan) => (
@@ -445,7 +461,7 @@ function App() {
               ))}
             </Card>
           )}
-          {state.operations.some((op) => op.kind === "quarantine" && op.status === "complete") && (
+          {page !== "JEV Analytics" && page !== "Router Health" && state.operations.some((op) => op.kind === "quarantine" && op.status === "complete") && (
             <Card title="Files moved safely — nothing permanently deleted">
               <p>{state.operations.filter((op) => op.kind === "quarantine" && op.status === "complete").length} file(s) are in recoverable quarantine. This does not free disk space.</p>
               <ul>{state.operations.filter((op) => op.kind === "quarantine" && op.status === "complete").slice(0, 3).map((op) => <li key={op.id}>{op.source}</li>)}</ul>
@@ -616,6 +632,8 @@ function App() {
   );
 
   function renderPage() {
+    if (page === "JEV Analytics") return <Analytics request={request} />;
+    if (page === "Router Health") return <RouterHealth request={request} />;
     if (page === "Overview")
       return (
         <>
@@ -1118,6 +1136,7 @@ function App() {
           ))}
         </Card>
         <Card title="Privacy and Jev">
+          <ConnectionCode request={request} />
           <div className="setting-row">
             <span>
               <strong>Jev classification</strong>

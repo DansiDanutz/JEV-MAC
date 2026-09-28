@@ -1,11 +1,16 @@
 import http from "node:http";
 import { promises as fs } from "node:fs";
+import { Pairing } from "./pairing.ts";
+import { startUsageRecorder } from "./usage-recorder.ts";
+import { routerHealth } from "./router-health.ts";
 import path from "node:path";
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { Engine, type FileRecord, type Root } from "./core.ts";
 import { buildPayload, classify, type JevPayload } from "./jev.ts";
 import { pickFolder } from "./folder-picker.ts";
+import { collectAnalytics } from "./analytics.ts";
+import { ReceiptStore, receiptId } from "./receipts.ts";
 
 const project = fileURLToPath(new URL("../", import.meta.url));
 const allowedAgent = new Set([
@@ -23,6 +28,7 @@ export async function startServer(
     port?: number;
     apiKey?: string;
     folderPicker?: (location: unknown) => Promise<string | null>;
+    recordUsage?: boolean;
   } = {},
 ) {
   const dataDir = path.resolve(
@@ -58,7 +64,10 @@ export async function startServer(
   await lock.writeFile(String(process.pid));
   await lock.close();
   const engine = new Engine(dataDir);
+  const receipts = new ReceiptStore(dataDir);
   let pickerOpen = false;
+  let recorder: ReturnType<typeof startUsageRecorder> | null = null;
+  const pairing = new Pairing();
   await engine.reconcile();
   const browserToken = randomBytes(32).toString("hex"),
     agentToken = randomBytes(32).toString("hex");
@@ -108,6 +117,21 @@ export async function startServer(
       if (req.headers.origin && req.headers.origin !== origin)
         return send(res, 403, { error: "Cross-origin requests are forbidden" });
       const url = new URL(req.url || "/", origin);
+      if (url.pathname === "/api/connect") {
+        if (req.method !== "POST" || req.headers.origin !== origin)
+          return send(res, 403, { error: "Connection requires a same-origin browser request" });
+        if (!req.headers["content-type"]?.startsWith("application/json"))
+          return send(res, 415, { error: "JSON required" });
+        let text = "";
+        for await (const chunk of req) {
+          text += chunk;
+          if (text.length > 256) return send(res, 413, { error: "Request too large" });
+        }
+        let code: unknown;
+        try { code = JSON.parse(text).code; } catch { return send(res, 400, { error: "Invalid connection request" }); }
+        if (!pairing.redeem(code)) return send(res, 401, { error: "Code invalid, expired or already used. Generate a new code in the unlocked browser’s Settings." });
+        return send(res, 200, { token: browserToken });
+      }
       if (url.pathname.startsWith("/api/")) {
         const token = (req.headers.authorization || "").replace(/^Bearer /, "");
         const browser = equal(token, browserToken),
@@ -120,7 +144,11 @@ export async function startServer(
           return send(res, 403, {
             error: "This action requires human approval in the dashboard",
           });
+        if (req.method === "GET" && url.pathname === "/api/jev-analytics") {
+          return send(res, 200, { ...await collectAnalytics({ cached: engine.list<any>("jev-cache"), attempts: engine.list<any>("jev-request").length, store: receipts }), recorder: recorder?.status() ?? null });
+        }
         if (req.method === "GET" && url.pathname === "/api/state") {
+          // File catalog state is separate from router evidence.
           const offset = Math.max(
               0,
               Number(url.searchParams.get("offset")) || 0,
@@ -145,6 +173,8 @@ export async function startServer(
             },
           });
         }
+        if (req.method === "GET" && url.pathname === "/api/router-health")
+          return send(res, 200, await routerHealth(receipts.list()));
         if (req.method !== "POST")
           return send(res, 405, { error: "Method not allowed" });
         if (browser && req.headers.origin !== origin)
@@ -162,6 +192,8 @@ export async function startServer(
         const body = JSON.parse(text || "{}");
         let result: unknown;
         switch (url.pathname) {
+          case "/api/connect-code":
+            return send(res, 200, pairing.create());
           case "/api/roots":
             result = await engine.addRoot(body.path);
             break;
@@ -277,9 +309,14 @@ export async function startServer(
                 };
                 engine.put("jev-request", usage);
                 output = await classify(preview.payload, { apiKey, signal });
-                engine.put("jev-cache", { id: cacheId, output } as {
+                const eventId = receiptId("jev-mac", usage.id);
+                engine.put("jev-cache", { id: cacheId, output, receiptId: eventId } as {
                   id: string;
                 });
+                const roots = [...new Set(preview.fileIds.map(id => engine.get<FileRecord>("file", id).rootId))];
+                try {
+                  receipts.add({ id: eventId, source: "jev-mac", project: roots.length === 1 ? `root-${roots[0]}` : "multiple-roots", occurredAt: new Date().toISOString(), inputTokens: output.usage.input_tokens, outputTokens: output.usage.output_tokens });
+                } catch { console.warn("Usage receipt could not be saved; classification remains cached."); }
               }
               for (const answer of output.results) {
                 signal.throwIfAborted();
@@ -382,6 +419,7 @@ export async function startServer(
     `<!doctype html><meta charset="utf-8"><title>Open JEV-MAC</title><p>Opening the local dashboard…</p><script>location.replace(${JSON.stringify(launchUrl)})</script>`,
     { mode: 0o600 },
   );
+  recorder = options.recordUsage ? startUsageRecorder(() => collectAnalytics({ store: receipts })) : null;
   return {
     engine,
     server,
@@ -390,8 +428,10 @@ export async function startServer(
     agentToken,
     dataDir,
     close: async () => {
+      await recorder?.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await engine.close();
+      receipts.close();
       await fs.unlink(lockPath);
     },
   };
@@ -400,7 +440,7 @@ if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  startServer()
+  startServer({ recordUsage: process.env.JEV_MAC_RECORD_USAGE !== "0" })
     .then((app) => {
       console.log(
         `JEV-MAC listening at ${app.origin}. Open runtime/launch.html to unlock. No scan starts automatically.`,

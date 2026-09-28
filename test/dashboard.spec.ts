@@ -32,6 +32,28 @@ async function waitForLatestJob(
 
 test.describe.configure({ mode: "serial" });
 
+test("analytics distinguishes recorded tokens from unmeasured savings", async ({ page }) => {
+  await page.route("**/api/jev-analytics", route => route.fulfill({ json: {
+    collectedAt: "2026-09-28T00:00:00Z", totalInput: 12, totalOutput: 3,
+    meteredRecords: 1, unmeteredRecords: 20, sources: [], features: [], installations: [],
+    coverage: "Partial local evidence only.", baselineTokens: null, measuredSavings: null,
+    daily: { "2026-09-28": { input: 12, output: 3, records: 1 } },
+    harnesses: [{ name: "Codex", records: 1, metered: 1, input: 12, output: 3, models: { "test-model": 1 }, note: "Current history only" }, { name: "Kimi", records: 0, metered: 0, input: 0, output: 0, models: {}, note: "No attributable usage" }],
+  } }));
+  await openDashboard(page);
+  await page.getByRole("button", { name: "JEV Analytics", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "15 JEV tokens", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Without JEV / tokens saved: not measured" })).toBeVisible();
+  await expect(page.getByText("20 records have no token counts.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toHaveCount(0);
+  await page.getByLabel("Show harness").selectOption("Kimi");
+  await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
+  await expect(page.getByText("No attributable records available", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Daily recorded JEV usage (UTC)" })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh JEV analytics", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "15 JEV tokens", exact: true })).toBeVisible();
+});
+
 test.beforeAll(async () => {
   dataDir = await fs.mkdtemp("/private/tmp/jev-dashboard-data-");
   await build({
@@ -40,6 +62,47 @@ test.beforeAll(async () => {
     logLevel: "silent",
   });
   app = await startServer({ dataDir, port: 0 });
+});
+
+test("router health shows evidence without claiming live reliability and handles errors", async ({ page }) => {
+  let fail = false;
+  await page.route("**/api/router-health", route => fail ? route.fulfill({ status: 500, json: { error: "fixture" } }) : route.fulfill({ json: {
+    checkedAt: "2026-09-28T00:00:00Z", version: "0.3.0", recordedDecisions: 1,
+    privacy: { restricted: true, directoryMode: "700", checkedFiles: 1, insecureFiles: 0, skippedFiles: 0, complete: true },
+    recent: [{ at: "2026-09-28T00:00:00Z", harness: "codex", model: "test-model", tokens: 1785 }],
+  } }));
+  await openDashboard(page);
+  await page.getByRole("button", { name: "Router Health", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "JEV Router checks" })).toBeVisible();
+  await expect(page.getByText("Checked log permissions are restricted", { exact: true })).toBeVisible();
+  await expect(page.getByText("codex → test-model", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.getByRole("button", { name: "Refresh router checks" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  fail = true;
+  await page.getByRole("button", { name: "Refresh router checks" }).click();
+  await expect(page.getByRole("alert")).toContainText("Could not check the router");
+});
+
+test("connects an isolated browser with a one-time code and recovers an expired session", async ({ page, browser }) => {
+  await openDashboard(page);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Create connection code", exact: true }).click();
+  const notice = page.getByRole("status").filter({ hasText: "Connection code:" });
+  await expect(notice).toBeVisible();
+  const code = await notice.locator("code").innerText();
+  const isolated = await browser.newContext();
+  try {
+    const other = await isolated.newPage();
+    await other.goto(`${app.origin}/#token=expired-test-session`);
+    await expect(other.getByRole("heading", { name: "Connect to JEV-MAC", exact: true })).toBeVisible();
+    await other.getByLabel("Connection code", { exact: true }).fill(code);
+    await other.getByRole("button", { name: "Connect this browser", exact: true }).click();
+    await expect(other.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+    await other.reload();
+    await expect(other.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  } finally { await isolated.close(); }
 });
 
 test.afterAll(async () => {
