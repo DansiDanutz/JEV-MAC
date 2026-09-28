@@ -79,6 +79,32 @@ This is not continuous cross-harness capture: producers still need to emit recei
 and router activity can be missed between manual refreshes.
 # Harness and daily views
 
+## Automatic capture
+
+Normal JEV-MAC startup now captures bounded known JEV logs every 15 seconds while
+the app server is running. No system service, harness hook or routing config is
+installed. Set `JEV_MAC_RECORD_USAGE=0` before starting the server to disable this;
+manual analytics refresh still captures receipts. Tests using `startServer()` are
+opt-in, so ordinary synthetic tests do not read real usage automatically.
+
+The recorder never overlaps its own runs, waits for in-flight work on shutdown,
+and reports sanitized failures. This is best-effort polling, not lossless telemetry:
+the router keeps only 20 decisions per session, so bursts between captures and
+activity while JEV-MAC is stopped can be missed. Only existing metered router
+records become durable receipts; Hermes records without usage remain unmetered.
+
+Optional imported receipt fields: `harness` (codex, claude, hermes, kimi, glm,
+jev-mac, unknown), `model` (bounded identifier), `durationMs` (integer), and
+`outcome` (decision-recorded, success, failure, unknown). Legacy receipts can gain
+missing metadata but conflicting existing fields are rejected. Use nonsensitive
+project slugs. No prompts, responses, paths or credentials are accepted.
+
+Codex filenames establish attribution for captured records. Other router histories
+remain unknown rather than guessed Claude usage. The installed router discards
+some latency fields before writing history and does not establish project/task
+outcomes. Those require explicit instrumented producer receipts in a later stage.
+Nothing here measures downstream agent spend or proves savings.
+
 The analytics page separates current `codex-PID` router histories from other,
 unidentified session histories, Hermes logs, JEV-MAC and explicit project imports.
 Claude session filenames alone are not proof of harness identity. Kimi, GLM and

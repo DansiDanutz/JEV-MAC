@@ -24,6 +24,11 @@ test("harness attribution is conservative and undated receipts remain counted", 
     assert.equal(report.harnesses.find(h => h.name === "Kimi")?.records, 0);
     assert.equal(report.daily["2026-09-26"].input, 10);
     assert.equal((await collectAnalytics({ home: root, temp: root, store })).totalInput, 13);
+    await fs.unlink(path.join(root, "jev-claude", "codex-123.json"));
+    const retained = await collectAnalytics({ home: root, temp: root, store });
+    assert.equal(retained.harnesses.find(h => h.name === "Codex")?.input, 10);
+    assert.equal(retained.harnesses.find(h => h.name === "Codex")?.models["example-model"], 1);
+    assert.equal(retained.receiptCoverage.harnessAttributed, 1);
   } finally { store.close(); await fs.rm(root, { recursive: true, force: true }); }
 });
 test("analytics reports gaps and deduplicates session history", async () => {

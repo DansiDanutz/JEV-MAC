@@ -11,6 +11,10 @@ test("receipt ledger persists and imports are idempotent, conflicts never overwr
   try {
     assert.equal(store.add(example), true); assert.equal(store.add(example), false);
     assert.throws(() => store.add({ ...example, inputTokens: 100 }), /conflict/);
+    assert.equal(store.add({ ...example, harness: "claude", model: "test-model", durationMs: 42, outcome: "decision-recorded" }), false);
+    assert.equal(store.add(example), false);
+    assert.equal(store.list()[0].harness, "claude");
+    assert.throws(() => store.add({ ...example, harness: "codex" }), /conflict/);
     store.close(); store = new ReceiptStore(dir);
     assert.equal(store.list().length, 1); assert.equal(store.list()[0].inputTokens, 10);
     assert.equal((await fs.stat(path.join(dir, "usage-receipts.sqlite"))).mode & 0o777, 0o600);

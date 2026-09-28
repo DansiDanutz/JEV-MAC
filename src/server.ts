@@ -1,6 +1,7 @@
 import http from "node:http";
 import { promises as fs } from "node:fs";
 import { Pairing } from "./pairing.ts";
+import { startUsageRecorder } from "./usage-recorder.ts";
 import path from "node:path";
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -26,6 +27,7 @@ export async function startServer(
     port?: number;
     apiKey?: string;
     folderPicker?: (location: unknown) => Promise<string | null>;
+    recordUsage?: boolean;
   } = {},
 ) {
   const dataDir = path.resolve(
@@ -63,6 +65,7 @@ export async function startServer(
   const engine = new Engine(dataDir);
   const receipts = new ReceiptStore(dataDir);
   let pickerOpen = false;
+  let recorder: ReturnType<typeof startUsageRecorder> | null = null;
   const pairing = new Pairing();
   await engine.reconcile();
   const browserToken = randomBytes(32).toString("hex"),
@@ -141,7 +144,7 @@ export async function startServer(
             error: "This action requires human approval in the dashboard",
           });
         if (req.method === "GET" && url.pathname === "/api/jev-analytics") {
-          return send(res, 200, await collectAnalytics({ cached: engine.list<any>("jev-cache"), attempts: engine.list<any>("jev-request").length, store: receipts }));
+          return send(res, 200, { ...await collectAnalytics({ cached: engine.list<any>("jev-cache"), attempts: engine.list<any>("jev-request").length, store: receipts }), recorder: recorder?.status() ?? null });
         }
         if (req.method === "GET" && url.pathname === "/api/state") {
           const offset = Math.max(
@@ -410,6 +413,7 @@ export async function startServer(
     `<!doctype html><meta charset="utf-8"><title>Open JEV-MAC</title><p>Opening the local dashboard…</p><script>location.replace(${JSON.stringify(launchUrl)})</script>`,
     { mode: 0o600 },
   );
+  recorder = options.recordUsage ? startUsageRecorder(() => collectAnalytics({ store: receipts })) : null;
   return {
     engine,
     server,
@@ -418,6 +422,7 @@ export async function startServer(
     agentToken,
     dataDir,
     close: async () => {
+      await recorder?.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await engine.close();
       receipts.close();
@@ -429,7 +434,7 @@ if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  startServer()
+  startServer({ recordUsage: process.env.JEV_MAC_RECORD_USAGE !== "0" })
     .then((app) => {
       console.log(
         `JEV-MAC listening at ${app.origin}. Open runtime/launch.html to unlock. No scan starts automatically.`,

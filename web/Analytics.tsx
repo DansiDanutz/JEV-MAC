@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import type { collectAnalytics } from "../src/analytics.ts";
-type Report = Awaited<ReturnType<typeof collectAnalytics>>;
+type Report = Awaited<ReturnType<typeof collectAnalytics>> & { recorder?: { enabled: boolean; intervalMs: number; lastCompletedAt: string | null; lastError: string | null } | null };
 export function Analytics({ request }: { request: <T>(path: string) => Promise<T> }) {
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
@@ -18,7 +18,10 @@ export function Analytics({ request }: { request: <T>(path: string) => Promise<T
     <div className="section-toolbar"><div><h2>JEV on this Mac</h2><p>Usage evidence, available tools, and what they optimize.</p></div><button disabled={busy} onClick={refresh}>{busy ? "Reading local records…" : "Refresh JEV analytics"}</button></div>
     {error && <p role="alert">{error}</p>}
     {!report ? <p role="status">{busy ? "Checking known JEV logs. No paid calls or uploads." : "No report loaded."}</p> : <>
-      <p>Checked {new Date(report.collectedAt).toLocaleString()}. Numeric receipts are preserved locally on refresh. No background auditing or paid calls.</p>
+      <p>Checked {new Date(report.collectedAt).toLocaleString()}. {report.recorder?.enabled ? `Automatic local usage capture every ${report.recorder.intervalMs / 1000} seconds while JEV-MAC runs.` : "Usage capture on refresh only."} No paid calls or personal-folder scans.</p>
+      {report.recorder?.lastCompletedAt && <p>Last automatic capture: {new Date(report.recorder.lastCompletedAt).toLocaleString()}.</p>}
+      {report.recorder?.lastError && <p role="alert">{report.recorder.lastError}</p>}
+      {report.receiptCoverage && <p>Saved receipt coverage: {report.receiptCoverage.harnessAttributed}/{report.receiptCoverage.total} identify a harness; {report.receiptCoverage.projectTagged} are project-tagged; {report.receiptCoverage.durationMeasured} include duration; {report.receiptCoverage.taskOutcomes} include a task outcome. A routing decision is not task success.</p>}
       <section className="card"><h2>Recorded usage — not lifetime totals</h2>
         <h3>{report.meteredRecords ? count(report.totalInput + report.totalOutput) + " JEV tokens" : "Token usage unavailable"}</h3>
         <p>{count(report.totalInput)} input · {count(report.totalOutput)} output from {count(report.meteredRecords)} retained metered records.</p>

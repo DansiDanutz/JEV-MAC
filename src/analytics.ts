@@ -85,7 +85,9 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
           (/^codex-\d+\.json$/.test(file) ? codexRows : otherRouterRows).push(r);
           const usage = r.jev?.response?.usage ?? r.usage;
           if (options.store && number(usage?.input_tokens) && number(usage?.output_tokens) && typeof r.at === "number" && Number.isFinite(new Date(r.at).getTime())) {
-            options.store.add({ id: receiptId("router", file + ":" + r.at), source: "router", project: "unattributed", occurredAt: new Date(r.at).toISOString(), inputTokens: usage.input_tokens, outputTokens: usage.output_tokens });
+            const model = typeof r.model === "string" && /^[a-zA-Z0-9][a-zA-Z0-9:._/-]{0,99}$/.test(r.model) && !/sk-|token|secret|key/i.test(r.model) ? r.model : undefined;
+            options.store.add({ id: receiptId("router", file + ":" + r.at), source: "router", project: "unattributed", occurredAt: new Date(r.at).toISOString(), inputTokens: usage.input_tokens, outputTokens: usage.output_tokens,
+              harness: /^codex-\d+\.json$/.test(file) ? "codex" : "unknown", ...(model ? { model } : {}), outcome: "decision-recorded" });
           } else unsavedRows.push(r);
         }
       }
@@ -93,7 +95,7 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
   }
   const router = summarize("Codex / Claude router", "Temporary jev-claude session status", rows);
   const saved = options.store?.list() ?? [];
-  const toRow = (r: typeof saved[number]) => ({ date: r.occurredAt, usage: { input_tokens: r.inputTokens, output_tokens: r.outputTokens } });
+  const toRow = (r: typeof saved[number]) => ({ date: r.occurredAt, model: r.model, usage: { input_tokens: r.inputTokens, output_tokens: r.outputTokens } });
   if (options.store) {
     const persisted = summarize("Codex / Claude router", "Durable receipts imported from temporary session history", [...saved.filter(r => r.source === "router").map(toRow), ...unsavedRows]);
     // Unmetered current entries remain visible; stored metered entries replace, not add to, live ones.
@@ -101,7 +103,7 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
     Object.assign(router, persisted);
   }
   router.warnings.push("At most 20 recent decisions per session; temporary files can disappear. Not installation-to-date usage.", ...routerWarnings);
-  if (options.store) router.warnings.push("Metered receipts seen on refresh are saved locally and survive temporary-log removal. No background collector is running; activity between refreshes can still be missed. Model counts describe currently retained source history only.");
+  if (options.store) router.warnings.push("Captured metered receipts survive temporary-log removal. Polling can miss activity overwritten between captures. Source model counts describe current source history; attributed harness receipts retain captured models.");
   sources.push(router);
   const hermes = path.join(home, ".hermes");
   const profileDirs = [hermes, ...(await names(path.join(hermes, "profiles"))).map(n => path.join(hermes, "profiles", n))];
@@ -148,7 +150,7 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
     ["GrokBot research pilot checkout", "ZCodeProject/GrokBot-jev-research-pilot"],
   ].map(async ([name, location]) => ({ name, location, present: await present(path.join(home, location)) })));
   const harnesses = [
-    { ...summarize("Codex", "Current codex-PID router history", codexRows), note: "JEV router decisions only, not Codex task tokens. Historical receipts without harness metadata remain in the combined total." },
+    { ...summarize("Codex", "Attributed receipts plus unpersisted current history", options.store ? [...saved.filter(r => r.source === "router" && r.harness === "codex").map(toRow), ...codexRows.filter(r => unsavedRows.includes(r))] : codexRows), note: "Captured JEV router decisions only, not Codex task tokens. Legacy receipts without harness metadata remain in the combined total." },
     { ...summarize("Claude Code / unidentified router sessions", "Other current router session histories", otherRouterRows), note: "Claude uses session IDs; filenames alone do not establish harness identity. These records are not automatically attributed to Claude." },
     ...sources.filter(s => s.name === "Hermes decision log" || s.name === "JEV-MAC classification" || s.name.startsWith("Project:")).map(s => ({ ...s, note: s.warnings.join(" ") })),
     ...["Kimi", "GLM", "Other harnesses"].map(name => ({ ...summarize(name, "No dedicated attributable receipt adapter", []), note: "No attributable usage available. This is not zero usage. Import explicit project receipts; model names alone do not identify a harness." })),
@@ -160,6 +162,13 @@ export async function collectAnalytics(options: { home?: string; temp?: string; 
   }
   return {
     collectedAt: new Date().toISOString(), sources, features: catalog, installations, harnesses, daily,
+    receiptCoverage: {
+      total: saved.length,
+      harnessAttributed: saved.filter(r => r.harness && r.harness !== "unknown").length,
+      projectTagged: saved.filter(r => r.project !== "unattributed").length,
+      durationMeasured: saved.filter(r => r.durationMs !== undefined).length,
+      taskOutcomes: saved.filter(r => r.outcome === "success" || r.outcome === "failure").length,
+    },
     totalInput: sources.reduce((n, s) => n + s.input, 0), totalOutput: sources.reduce((n, s) => n + s.output, 0),
     meteredRecords: sources.reduce((n, s) => n + s.metered, 0),
     unmeteredRecords: sources.reduce((n, s) => n + s.records - s.metered, 0),
