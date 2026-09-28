@@ -32,6 +32,21 @@ async function waitForLatestJob(
 
 test.describe.configure({ mode: "serial" });
 
+test("Local Storage is read-only on open and offers connected-folder review", async ({ page }) => {
+  await openDashboard(page);
+  await page.getByRole("button", { name: "Local Storage", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Make room for your next project" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Disk headroom" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Preview JEV review (0)" })).toBeDisabled();
+  expect(app.engine.list("job")).toHaveLength(0);
+  for (const width of [375, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.getByRole("button", { name: "Connect folders / scan" }).click();
+  await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+});
+
 test("analytics distinguishes recorded tokens from unmeasured savings", async ({ page }) => {
   await page.route("**/api/jev-analytics", route => route.fulfill({ json: {
     collectedAt: "2026-09-28T00:00:00Z", totalInput: 12, totalOutput: 3,

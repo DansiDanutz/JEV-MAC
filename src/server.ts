@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import { Pairing } from "./pairing.ts";
 import { startUsageRecorder } from "./usage-recorder.ts";
 import { routerHealth } from "./router-health.ts";
+import { localStorageReport } from "./local-storage.ts";
 import path from "node:path";
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -144,6 +145,9 @@ export async function startServer(
           return send(res, 403, {
             error: "This action requires human approval in the dashboard",
           });
+        if (req.method === "GET" && url.pathname === "/api/local-storage") {
+          return send(res, 200, await localStorageReport(engine.state("", 0, Number.MAX_SAFE_INTEGER).files, engine.list<Root>("root"), dataDir));
+        }
         if (req.method === "GET" && url.pathname === "/api/jev-analytics") {
           return send(res, 200, { ...await collectAnalytics({ cached: engine.list<any>("jev-cache"), attempts: engine.list<any>("jev-request").length, store: receipts }), recorder: recorder?.status() ?? null });
         }

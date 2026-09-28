@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import "./style.css";
 import { Analytics } from "./Analytics.tsx";
 import { RouterHealth } from "./RouterHealth.tsx";
+import { LocalStorage } from "./LocalStorage.tsx";
 import { Connect, ConnectionCode } from "./Connect.tsx";
 
 type Root = { id: string; path: string; scanStatus?: string };
@@ -86,6 +87,7 @@ type AppState = {
   fileTotal: number;
 };
 type Page =
+  | "Local Storage"
   | "JEV Analytics"
   | "Router Health"
   | "Overview"
@@ -108,6 +110,7 @@ const emptyState: AppState = {
   fileTotal: 0,
 };
 const pages: { name: Page; icon: string }[] = [
+  { name: "Local Storage", icon: "▤" },
   { name: "JEV Analytics", icon: "▥" },
   { name: "Router Health", icon: "⇄" },
   { name: "Overview", icon: "⌂" },
@@ -632,6 +635,7 @@ function App() {
   );
 
   function renderPage() {
+    if (page === "Local Storage") return <LocalStorage request={request} navigate={setPage} classify={ids => action("preview", "/api/classify-preview", { fileIds: ids }, result => setClassifyDialog(result))} />;
     if (page === "JEV Analytics") return <Analytics request={request} />;
     if (page === "Router Health") return <RouterHealth request={request} />;
     if (page === "Overview")
